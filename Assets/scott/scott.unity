@@ -245,7 +245,7 @@ TerrainCollider:
   m_Material: {fileID: 0}
   m_Enabled: 1
   m_TerrainData: {fileID: 15600000, guid: 08c1f226d3281b947825c31392257a04, type: 2}
-  m_EnableTreeColliders: 1
+  m_EnableTreeColliders: 0
 --- !u!218 &754621203
 Terrain:
   m_ObjectHideFlags: 0
@@ -306,6 +306,7 @@ GameObject:
   - component: {fileID: 850480926}
   - component: {fileID: 850480925}
   - component: {fileID: 850480924}
+  - component: {fileID: 850480927}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -379,3 +380,19 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 0
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &850480927
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 850480923}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 15ae4539805c4e64e953b46a15d89f71, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  terrain: {fileID: 754621203}
+  rawFile: {fileID: 102900000, guid: ce6384f3e48ece94c9597a97e005ebc5, type: 3}
+  resolution: 16
+  maxHeight: 2.89
