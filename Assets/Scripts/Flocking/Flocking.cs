@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-struct boid{
+class boid{
     public Vector3 position;
     public Quaternion rotation;
     public Vector3 velocity;
@@ -14,6 +14,10 @@ public class Flocking : MonoBehaviour
 
     private List<boid> boids;
     private float maxForce = 10;
+
+
+    [SerializeField] private int numBoids = 50;
+    [SerializeField] private GameObject boidPrefab;
     
     //Where the boids can be
     public Vector3 areaOfEffect;
@@ -25,7 +29,27 @@ public class Flocking : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        //make boids do shit
+        IntegrateBoidMovement();
+    }
+    
+    void IntegrateBoidMovement()
+    {
+        for (int i = 0; i < boids.Count; i++)
+        {
+            Vector3 force = Seperation(i) + Alignment(i) + Cohesion(i);
+            boids[i].velocity += force * Time.deltaTime;
+            boids[i].position += boids[i].velocity * Time.deltaTime;
+        }
+    }
 
+    void GenerateBoids()
+    {
+        //loop through and create boids
+        for (int i = 0; i < numBoids; i++)
+        {
+            boid newBoid = new boid();
+        }
     }
     
 
