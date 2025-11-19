@@ -330,6 +330,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: f17951fe6b8f7ac47af3176034eaf46a, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  numBoids: 50
+  boidPrefab: {fileID: 4056078868076855683, guid: f2db16c1c4ab3e945b3397b35bd324dd, type: 3}
+  areaOfEffect: {x: 50, y: 50, z: 50}
+  cohesionRadius: 0
+  separationRadius: 0
+  alignmentRadius: 0
+  k: 0
 --- !u!4 &1960192120
 Transform:
   m_ObjectHideFlags: 0
