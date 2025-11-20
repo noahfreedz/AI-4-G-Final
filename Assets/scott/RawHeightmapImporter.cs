@@ -8,96 +8,106 @@ using UnityEditor;
 public class RawHeightmapImporter : MonoBehaviour
 {
     [System.Serializable]
-    public class NoiseLayer
+    public class HeightmapLayer
     {
         public DefaultAsset rawFile;
+        [Range(0f, 1f)]
+        public float blendAmount = 1f;
     }
 
+    [Header("Terrain")]
     public Terrain terrain;
-    public DefaultAsset rawFile;
-    public List<NoiseLayer> noiseLayers = new List<NoiseLayer>();
+
+    [Header("Heightmap Layers")]
+    public List<HeightmapLayer> heightmapLayers = new List<HeightmapLayer>();
     public int rawResolution = 512;
-    public float blendStrength = 0.3f;
-    public float smoothAmount = 0.8f;
 
-    public void ApplySubtleVariations()
+    [Header("Controls")]
+    [Tooltip("Overall height/intensity. 0 = completely flat")]
+    [Range(0f, 2f)]
+    public float heightScale = 0.5f;
+
+    [Tooltip("Amplify height differences. >1 = steeper mountains/deeper valleys")]
+    [Range(0.1f, 5f)]
+    public float heightContrast = 1f;
+
+    [Tooltip("Shift entire heightmap up/down. 0.5 = centered, <0.5 = lower, >0.5 = higher")]
+    [Range(0f, 1f)]
+    public float heightOffset = 0.5f;
+
+    [Tooltip("Feature coverage. 0 = completely flat, 1 = full coverage")]
+    [Range(0f, 1f)]
+    public float featureDensity = 1f;
+
+    [Tooltip("Size of density clusters (smaller = more scattered features)")]
+    [Range(0.001f, 0.5f)]
+    public float densityScale = 0.1f;
+
+    [Header("Post-Processing")]
+    public float smoothAmount = 0f;
+
+    [Header("Randomization")]
+    [Tooltip("Strength of random variations")]
+    [Range(0f, 1f)]
+    public float randomStrength = 0.3f;
+
+    public void ApplyHeightmap()
     {
 #if UNITY_EDITOR
-        if (terrain == null || rawFile == null)
+        if (terrain == null || heightmapLayers.Count == 0)
         {
-            Debug.LogError("Assign a Terrain and a RAW file first.");
+            Debug.LogError("Assign a Terrain and at least one heightmap layer first.");
             return;
         }
+
 
         TerrainData terrainData = terrain.terrainData;
         int terrainResolution = terrainData.heightmapResolution;
 
-        // Get actual file path
-        string path = AssetDatabase.GetAssetPath(rawFile);
+        float[,] combined = new float[terrainResolution, terrainResolution];
+        float totalBlend = 0f;
 
-        // Read raw bytes from the file
-        byte[] data = File.ReadAllBytes(path);
-
-        // Convert raw bytes → height array
-        float[,] rawHeights = LoadRaw(data, rawResolution);
-
-        // Get current terrain heights
-        float[,] currentHeights = terrainData.GetHeights(0, 0, terrainResolution, terrainResolution);
-
-        // Blend RAW data into terrain (creates subtle variations)
-        float[,] blendedHeights = BlendHeightmaps(currentHeights, rawHeights, terrainResolution, rawResolution);
-
-        // Apply to terrain
-        terrainData.SetHeights(0, 0, blendedHeights);
-
-        Debug.Log("Subtle heightmap variations applied to full terrain.");
-#endif
-    }
-
-    public void BlendPerlinNoiseLayers()
-    {
-#if UNITY_EDITOR
-        if (terrain == null || noiseLayers.Count == 0)
+        foreach (var layer in heightmapLayers)
         {
-            Debug.LogError("Assign a Terrain and at least one RAW noise file first.");
-            return;
-        }
-
-        TerrainData terrainData = terrain.terrainData;
-        int terrainResolution = terrainData.heightmapResolution;
-
-        // Initialize blended heightmap
-        float[,] blendedHeights = new float[terrainResolution, terrainResolution];
-
-        // Load and blend all noise layers with equal weight
-        int validLayers = 0;
-        foreach (var layer in noiseLayers)
-        {
-            if (layer.rawFile == null) continue;
+            if (layer.rawFile == null || layer.blendAmount <= 0f) continue;
 
             string path = AssetDatabase.GetAssetPath(layer.rawFile);
             byte[] data = File.ReadAllBytes(path);
             float[,] rawHeights = LoadRaw(data, rawResolution);
 
-            // Blend this layer into the result with equal weight
-            BlendLayer(blendedHeights, rawHeights, terrainResolution, 1f);
-            validLayers++;
+            float[,] layerResult = ApplyHeightmapWithControls(rawHeights, terrainResolution);
+
+            for (int y = 0; y < terrainResolution; y++)
+            {
+                for (int x = 0; x < terrainResolution; x++)
+                {
+                    combined[y, x] += layerResult[y, x] * layer.blendAmount;
+                }
+            }
+            totalBlend += layer.blendAmount;
         }
 
-        // Normalize by number of layers (equal blending)
-        if (validLayers > 0)
-            NormalizeHeightmapByCount(blendedHeights, validLayers);
-
-        // Apply smoothing for natural mountains
-        for (int i = 0; i < Mathf.RoundToInt(smoothAmount * 5f); i++)
+        if (totalBlend > 0)
         {
-            SmoothHeightmap(blendedHeights);
+            for (int y = 0; y < terrainResolution; y++)
+            {
+                for (int x = 0; x < terrainResolution; x++)
+                {
+                    combined[y, x] /= totalBlend;
+                }
+            }
+        }
+        if (smoothAmount > 0)
+        {
+            for (int i = 0; i < Mathf.RoundToInt(smoothAmount); i++)
+            {
+                SmoothHeightmap(combined);
+            }
         }
 
-        // Apply to terrain
-        terrainData.SetHeights(0, 0, blendedHeights);
+        terrainData.SetHeights(0, 0, combined);
 
-        Debug.Log("Perlin noise layers blended smoothly!");
+        Debug.Log($"Heightmap applied - {heightmapLayers.Count} layers, Scale: {heightScale}, Density: {featureDensity}");
 #endif
     }
 
@@ -116,92 +126,82 @@ public class RawHeightmapImporter : MonoBehaviour
         // Get current terrain heights
         float[,] currentHeights = terrainData.GetHeights(0, 0, terrainResolution, terrainResolution);
 
-        // Apply random variations to entire terrain
-        Randomize(currentHeights, blendStrength);
+        // Apply random variations
+        for (int y = 0; y < terrainResolution; y++)
+        {
+            for (int x = 0; x < terrainResolution; x++)
+            {
+                // Density mask - only randomize where features should be
+                float densityNoise = Mathf.PerlinNoise(x * densityScale, y * densityScale);
 
-        // Apply to terrain
+                if (densityNoise > (1f - featureDensity))
+                {
+                    float fadeFactor = Mathf.Clamp01((densityNoise - (1f - featureDensity)) / Mathf.Max(featureDensity, 0.01f));
+
+                    // Create random variation (can go up or down)
+                    float randomVariation = (Random.value - 0.5f) * randomStrength * heightScale * fadeFactor;
+
+                    currentHeights[y, x] = Mathf.Clamp01(currentHeights[y, x] + randomVariation);
+                }
+            }
+        }
+
+        // Smooth if needed
+        if (smoothAmount > 0)
+        {
+            for (int i = 0; i < Mathf.RoundToInt(smoothAmount); i++)
+            {
+                SmoothHeightmap(currentHeights);
+            }
+        }
+
         terrainData.SetHeights(0, 0, currentHeights);
 
-        Debug.Log("Randomized heightmap variations applied to full terrain.");
+        Debug.Log($"Random variations applied - Strength: {randomStrength}, Density: {featureDensity}");
 #endif
     }
 
-    void BlendLayer(float[,] result, float[,] layerHeights, int terrainRes, float weight)
+    float[,] ApplyHeightmapWithControls(float[,] rawHeights, int terrainResolution)
     {
-        for (int y = 0; y < terrainRes; y++)
-        {
-            for (int x = 0; x < terrainRes; x++)
-            {
-                // Map terrain coordinates to noise coordinates
-                float noiseX = (x / (float)terrainRes) * layerHeights.GetLength(1);
-                float noiseY = (y / (float)terrainRes) * layerHeights.GetLength(0);
+        float[,] result = new float[terrainResolution, terrainResolution];
+        int rawRes = rawHeights.GetLength(0);
 
-                float sampledNoise = SampleBilinear(layerHeights, noiseX, noiseY);
-                result[y, x] += sampledNoise * weight;
-            }
+        // If either control is at 0, return flat terrain
+        if (heightScale <= 0f || featureDensity <= 0f)
+        {
+            return result; // Already initialized to 0
         }
-    }
 
-    void NormalizeHeightmapByCount(float[,] map, int count)
-    {
-        int res = map.GetLength(0);
-        for (int y = 0; y < res; y++)
+        for (int y = 0; y < terrainResolution; y++)
         {
-            for (int x = 0; x < res; x++)
+            for (int x = 0; x < terrainResolution; x++)
             {
-                map[y, x] = map[y, x] / count;
-            }
-        }
-    }
+                // Density mask - determines if feature appears here
+                float densityNoise = Mathf.PerlinNoise(x * densityScale, y * densityScale);
 
-    void SmoothHeightmap(float[,] map)
-    {
-        int res = map.GetLength(0);
-        float[,] temp = new float[res, res];
-
-        for (int y = 0; y < res; y++)
-        {
-            for (int x = 0; x < res; x++)
-            {
-                float sum = 0f;
-                int count = 0;
-
-                // Sample neighboring cells (3x3 kernel)
-                for (int dy = -1; dy <= 1; dy++)
+                // Only apply height if density mask passes threshold
+                if (densityNoise > (1f - featureDensity))
                 {
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        int nx = x + dx;
-                        int ny = y + dy;
+                    // Calculate fade at edges of features
+                    float fadeFactor = Mathf.Clamp01((densityNoise - (1f - featureDensity)) / Mathf.Max(featureDensity, 0.01f));
 
-                        if (nx >= 0 && nx < res && ny >= 0 && ny < res)
-                        {
-                            sum += map[ny, nx];
-                            count++;
-                        }
-                    }
+                    // Sample from heightmap
+                    float normalizedX = x / (float)terrainResolution;
+                    float normalizedY = y / (float)terrainResolution;
+
+                    float sampledX = normalizedX * rawRes;
+                    float sampledY = normalizedY * rawRes;
+
+                    float sampledHeight = SampleBilinear(rawHeights, sampledX, sampledY);
+
+                    // Apply height scale and fade
+                    result[y, x] = sampledHeight * heightScale * fadeFactor;
                 }
-
-                temp[y, x] = sum / count;
+                // else stays at 0 (flat)
             }
         }
 
-        // Copy smoothed values back
-        System.Array.Copy(temp, map, map.Length);
-    }
-
-    void Randomize(float[,] map, float strength)
-    {
-        int res = map.GetLength(0);
-        for (int y = 0; y < res; y++)
-        {
-            for (int x = 0; x < res; x++)
-            {
-                // Create subtle random variation (dips and rises)
-                float randomVariation = (Random.value - 0.5f) * strength;
-                map[y, x] = Mathf.Clamp01(map[y, x] + randomVariation);
-            }
-        }
+        return result;
     }
 
     float[,] LoadRaw(byte[] data, int res)
@@ -221,39 +221,47 @@ public class RawHeightmapImporter : MonoBehaviour
         return heights;
     }
 
-    float[,] BlendHeightmaps(float[,] terrainHeights, float[,] rawHeights, int terrainRes, int rawRes)
+    void SmoothHeightmap(float[,] map)
     {
-        float[,] result = new float[terrainRes, terrainRes];
+        int res = map.GetLength(0);
+        float[,] temp = new float[res, res];
 
-        for (int y = 0; y < terrainRes; y++)
+        for (int y = 0; y < res; y++)
         {
-            for (int x = 0; x < terrainRes; x++)
+            for (int x = 0; x < res; x++)
             {
-                // Map terrain coordinates to RAW coordinates
-                float rawX = (x / (float)terrainRes) * rawRes;
-                float rawY = (y / (float)terrainRes) * rawRes;
+                float sum = 0f;
+                int count = 0;
 
-                // Bilinear interpolation for smooth sampling
-                float sampledRaw = SampleBilinear(rawHeights, rawX, rawY);
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    for (int dx = -1; dx <= 1; dx++)
+                    {
+                        int nx = x + dx;
+                        int ny = y + dy;
 
-                // Blend: keep most of terrain, add subtle variation from RAW
-                // Convert RAW sample to a variation (-0.5 to 0.5 range for dips/rises)
-                float rawVariation = (sampledRaw - 0.5f) * blendStrength;
+                        if (nx >= 0 && nx < res && ny >= 0 && ny < res)
+                        {
+                            sum += map[ny, nx];
+                            count++;
+                        }
+                    }
+                }
 
-                result[y, x] = Mathf.Clamp01(terrainHeights[y, x] + rawVariation);
+                temp[y, x] = sum / count;
             }
         }
 
-        return result;
+        System.Array.Copy(temp, map, map.Length);
     }
 
     float SampleBilinear(float[,] map, float x, float y)
     {
         int res = map.GetLength(0);
 
-        // Clamp coordinates
-        x = Mathf.Clamp(x, 0, res - 1.001f);
-        y = Mathf.Clamp(y, 0, res - 1.001f);
+        // Wrap coordinates for seamless tiling
+        x = Mathf.Repeat(x, res - 0.001f);
+        y = Mathf.Repeat(y, res - 0.001f);
 
         int x0 = (int)x;
         int y0 = (int)y;
