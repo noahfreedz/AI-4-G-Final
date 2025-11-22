@@ -23,7 +23,7 @@ public class PlayerController : MonoBehaviour
         clamp_to_floor();
 
         // Pass Position To WFC
-        WFC.UpdateWFC(transform.position);
+        //WFC.UpdateWFC(transform.position);
     }
 
     private void handle_movement()
