@@ -9,13 +9,18 @@ class boid{
     public Vector3 velocity;
 };
 
+struct BoundingBox{
+    public Vector3 min;
+    public Vector3 max;
+};
+
 
 public class Flocking : MonoBehaviour
 {
 
     private List<boid> boids = new List<boid>();
     private float maxForce = 10;
-    private float maxSpeed = 50;
+    private float maxSpeed = 10;
 
 
     [SerializeField] private int numBoids = 50;
@@ -23,20 +28,25 @@ public class Flocking : MonoBehaviour
     
     //Where the boids can be
     public Vector3 areaOfEffect;
-    public float cohesionRadius;
-    public float separationRadius;
-    public float alignmentRadius;
-    public float k;
+    public float cohesionRadius = 1;
+    public float separationRadius = 1;
+    public float alignmentRadius = 1;
+    public float k = 1;
+    
+    BoundingBox boundingBox;
 
     private void Start()
     {
+        boundingBox = new BoundingBox();
+        boundingBox.min = transform.position - areaOfEffect;
+        boundingBox.max = transform.position + areaOfEffect;
         GenerateBoids();
     }
 
     // Update is called once per frame
     void Update()
     {
-        //make boids do shit
+        //make boids do stuff
         IntegrateBoidMovement();
     }
     
@@ -44,7 +54,18 @@ public class Flocking : MonoBehaviour
     {
         for (int i = 0; i < boids.Count; i++)
         {
+            //if boid is outside of the area of effect, reverse direction back into the bounding box
+            if (boids[i].gameAgent.transform.position.x > boundingBox.max.x
+                || boids[i].gameAgent.transform.position.x < boundingBox.min.x
+                || boids[i].gameAgent.transform.position.z > boundingBox.max.z
+                || boids[i].gameAgent.transform.position.z < boundingBox.min.z)
+            {
+                boids[i].velocity = -boids[i].velocity;
+            }
+            
             Vector3 force = Seperation(i) + Alignment(i) + Cohesion(i);
+            //Vector3 force = Alignment(i);
+            
             boids[i].velocity += force * Time.deltaTime;
         
             // Limit speed
@@ -60,16 +81,12 @@ public class Flocking : MonoBehaviour
 
     void GenerateBoids()
     {
-        //loop through and create boids
         for (int i = 0; i < numBoids; i++)
         {
             print("Creating boid");
-        
-            // Instantiate the prefab and get a reference to it
+    
             GameObject boidInstance = Instantiate(boidPrefab);
             boid newBoid = new boid();
-            
-            
         
             float minX = -10f;
             float maxX = 10f;
@@ -77,17 +94,22 @@ public class Flocking : MonoBehaviour
             float maxY = 5f;
             float minZ = -10f;
             float maxZ = 10f;
-        
-            // Create a random pos
+    
             Vector3 randomPos = new Vector3(
                 UnityEngine.Random.Range(minX, maxX),
                 UnityEngine.Random.Range(minY, maxY),
                 UnityEngine.Random.Range(minZ, maxZ));
-            
+        
             boidInstance.transform.position = randomPos;
-            
+        
+            // Give each boid a random initial velocity
+            Vector3 randomVelocity = new Vector3(
+                UnityEngine.Random.Range(-1f, 1f),
+                UnityEngine.Random.Range(-1f, 1f),
+                UnityEngine.Random.Range(-1f, 1f)).normalized * UnityEngine.Random.Range(maxSpeed * 0.3f, maxSpeed * 0.7f);
+        
             newBoid.gameAgent = boidInstance;
-            newBoid.velocity = boidInstance.transform.forward;
+            newBoid.velocity = randomVelocity;
             boids.Add(newBoid);
         }
     }
@@ -137,16 +159,19 @@ public class Flocking : MonoBehaviour
 
     Vector3 Alignment(int boidIndex)
     {
-        List<boid> neighbors  = new List<boid>();
+        List<boid> neighbors = new List<boid>();
         Vector3 velocitySum = Vector3.zero;
         Vector3 desiredVelocity = Vector3.zero;
 
-        foreach (boid b in boids)
+        for (int i = 0; i < boids.Count; i++) 
         {
-            double distance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, b.gameAgent.transform.position);
+            if (i == boidIndex) continue;  // Skip self
+        
+            double distance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, 
+                boids[i].gameAgent.transform.position);
             if (distance < alignmentRadius)
             {
-                neighbors.Add(b);
+                neighbors.Add(boids[i]);
             }
         }
 
@@ -159,10 +184,10 @@ public class Flocking : MonoBehaviour
         {
             velocitySum += b.velocity;
         }
-        
+
         Vector3 averageVelocity = velocitySum / neighbors.Count;
         desiredVelocity = averageVelocity * k;
-        
+    
         return desiredVelocity;
     }
     
