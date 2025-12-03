@@ -1,5 +1,8 @@
+using System;
+
 using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 using System.IO;
 
@@ -13,14 +16,15 @@ public class WaveFunctionCollapse : MonoBehaviour
         LEFT
     }
 
-    public struct Tile
+    public class Tile
     {
-        public Tile(int hash, Color[] pixels)
+        public Tile(int hash, int index, Color[] pixels)
         {
             // Set Internals
             tile_hash = hash;
             tile_pixels = pixels;
             frequency = 1;
+            tile_index = index;
 
             // Initalize Adjacency Dictionary
             adjacencies = new Dictionary<int, List<Tile>>();
@@ -32,6 +36,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
+        public int tile_index;
         int tile_hash;
         int frequency;
         public Color[] tile_pixels;
@@ -51,21 +56,90 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+    public class Cell
+    {
+        public Cell(int _x, int _y, int index, Dictionary<int, Tile> _hash_to_tile, GameObject cell_pixel_prefab)
+        {
+            // Define X, Y, & Index
+            x = _x;
+            y = _y;
+            cell_index = index;
+
+            // Start Uncollapsed
+            collapsed = false;
+            collapsed_tile = null;
+
+            // Define All Possible Options
+            collapse_options = new List<Tile>();
+            foreach (KeyValuePair<int, Tile> pair in _hash_to_tile)
+            {
+                collapse_options.Add(pair.Value);
+            }
+
+            // Create Base To Show Its A Tile
+            Vector3 cell_base_position = new Vector3(_x, 0, _y);
+            pixel = Instantiate(cell_pixel_prefab, cell_base_position, Quaternion.identity);
+        }
+
+        public void UpdateCell(Color cell_color)
+        {
+            Renderer p_render = pixel.GetComponent<Renderer>();
+            p_render.material.color = cell_color;
+        }
+
+        public Cell FetchNeighbor(Dictionary<Vector2Int, Cell> position_to_cell, DIRECTIONS direction)
+        {
+            Vector2Int position = new Vector2Int(x, y);
+
+            switch(direction)
+            {
+                case DIRECTIONS.UP:
+                    position.y -= 1;
+                    break;
+                case DIRECTIONS.DOWN:
+                    position.y += 1;
+                    break;
+                case DIRECTIONS.LEFT:
+                    position.x -= 1;
+                    break;
+                case DIRECTIONS.RIGHT:
+                    position.x += 1;
+                    break;
+            }
+
+            return position_to_cell[position];
+        }
+
+        public int x, y, cell_index;
+        public bool collapsed;
+        public Tile? collapsed_tile;
+        public List<Tile> collapse_options;
+        GameObject pixel;
+    }
+
     Vector2Int grid_start = new Vector2Int(0, 0);
     [SerializeField] int player_radius;
 
     [Header("WFC Prefabs")]
     [SerializeField] GameObject[] tile_prefabs;
-    [SerializeField] GameObject tile_base_prefab;
+    [SerializeField] public GameObject tile_base_prefab;
+    [SerializeField] public GameObject cell_base_prefab;
     [SerializeField] GameObject pixel_prefab;
 
     [Header("WFC Settings")]
     [SerializeField] int pattern_size;
+    [SerializeField] int cell_grid_size;
 
+    // Tile Variables
     private Dictionary<Vector2Int, GameObject> active_tiles = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<int, Tile> hash_to_tile = new Dictionary<int, Tile>();
+    private Dictionary<int, Tile> index_to_tile = new Dictionary<int, Tile>();
 
-    //private Dictionary<Vector2Int, Tile> active_tiles;
+    // Cell Variables
+    private List<Cell> cells = new List<Cell>();
+    private Dictionary<Vector2Int, Cell> position_to_cell = new Dictionary<Vector2Int, Cell>();
+    private Dictionary<int, Cell> index_to_cell = new Dictionary<int, Cell>();
+
 
     // Start is called before the first frame update
     void Start()
@@ -81,7 +155,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private void SpawnTile(Vector2Int grid_pos)
     {
-        int index = Random.Range(0, tile_prefabs.Length);
+        int index = UnityEngine.Random.Range(0, tile_prefabs.Length);
         GameObject tile_prefab = tile_prefabs[index];
         Vector3 worldPos = new Vector3(grid_pos.x, 0, grid_pos.y);
         GameObject tile = Instantiate(tile_prefab, worldPos, Quaternion.identity);
@@ -137,18 +211,17 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private void LoadWFCConditions(int p_size, string file_name)
     {
+        UnityEngine.Debug.Log("Starting WFC Contitions");
 
-        Debug.Log("Starting WFC Contitions");
         // Load Bitmap
         Texture2D bitmap = LoadBitmap(file_name);
 
-        Debug.Log("BM Width: " + bitmap.width);
-        Debug.Log("BM HeIght: " + bitmap.width);
+        int next_tile_index = 0;
 
         // Hashout Each Pattern
-        for (int x = 0; x < bitmap.width - p_size; x++)
+        for (int x = 0; x < bitmap.width; x++)
         {
-            for (int y = 0; y < bitmap.height - p_size; y++)
+            for (int y = 0; y < bitmap.height; y++)
             {
                 Color[] pattern = PullPattern(bitmap, p_size, new Vector2Int(x, y));
                 int p_hash = HashPixels(pattern);
@@ -156,116 +229,242 @@ public class WaveFunctionCollapse : MonoBehaviour
                 // Add Tile If Not Created Already
                 if (!hash_to_tile.ContainsKey(p_hash))
                 {
-                    Tile new_tile = new Tile(p_hash, pattern);
+                    Tile new_tile = new Tile(p_hash, next_tile_index, pattern);
+                    index_to_tile[next_tile_index] = new_tile;
                     hash_to_tile[p_hash] = new_tile;
-                   // Debug.Log("New Got Hash: " + p_hash);
-
+                    next_tile_index++;
                 }
                 else
                 {
                     hash_to_tile[p_hash].incrementFrequency();
-                   // Debug.Log("Repeat Got Hash: " + p_hash);
                 }
             }
-            
         }
-        Debug.Log("Pattern Count: " + hash_to_tile.Count);
 
         // Populate Adjacencies For All Tiles
         foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
         {
-            GenerateAdjacencies(bitmap, pair.Value);
-            int adjacencies = 0;
-            adjacencies += pair.Value.adjacencies[(int)DIRECTIONS.UP].Count;
-            adjacencies += pair.Value.adjacencies[(int)DIRECTIONS.DOWN].Count;
-            adjacencies += pair.Value.adjacencies[(int)DIRECTIONS.LEFT].Count;
-            adjacencies += pair.Value.adjacencies[(int)DIRECTIONS.RIGHT].Count;
-            //Debug.Log("ADJACENCIES: " + adjacencies);
+            GenerateAdjacencies(bitmap, pair.Value, pattern_size);
         }
 
-        Debug.Log("Finished Generating Adjancencies");
+        // Define Index
+        int cell_index = 0;
+        // Create Cell Grid
+        for(int x = 0; x < cell_grid_size; x++)
+        {
+            for (int y = 0; y < cell_grid_size; y++)
+            {
+                // Create Cell
+                Cell new_cell = new Cell(x, y, cell_index, hash_to_tile, cell_base_prefab);
+                cells.Add(new_cell);
 
+                // Add To "Position To Cell" Dictionary
+                Vector2Int position = new Vector2Int(x, y);
+                position_to_cell[position] = new_cell;
+                index_to_cell[cell_index] = new_cell;
+
+                // Increment Cell Index 
+                cell_index++;
+            }
+        }
+
+        // Pick A Random Cell
+        int random_cell_index = UnityEngine.Random.Range(0, cells.Count);
+
+        // Pick A Random Tile
+        int tile_index = UnityEngine.Random.Range(0, next_tile_index);
+
+        // Calculate Center Index
+        int center_index = pattern_size + 1;
+
+        // Get Tiles Center Color 
+        Color tile_center_color = index_to_tile[tile_index].tile_pixels[center_index];
+
+        // Populate Cell & Reduce Entropy
+        cells[random_cell_index].UpdateCell(tile_center_color);
+        cells[random_cell_index].collapsed = true;
+        cells[random_cell_index].collapsed_tile = index_to_tile[tile_index];
+        ReduceEntropy(cells[random_cell_index]);
+        StepWFC();
 
         // Debug to Display Every Tile Patterns
-        DisplayPatterns(bitmap.width);
+        //DisplayPatterns(bitmap.width, p_size);
     }
 
-    private void GenerateAdjacencies(Texture2D bitmap, Tile tile)
+    private void StepWFC()
     {
-        // Loop Through All Other Tiles & Compare Them
-        foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
+        Stopwatch timer = Stopwatch.StartNew();
+
+        int cell_index = -1;
+        int lowest_entropy = 9999;
+
+        // Sort Through To Find Lowest
+        foreach(Cell cell in cells)
         {
-            // Define Requirements For Tiles To Be Overlapping
-            int[] up_requirements = { 0, 1, 2, 3, 4, 5 };
-            int[] right_requirements = { 1, 2, 4, 5, 7, 8 };
-            int[] down_requirements = { 3, 4, 5, 6, 7, 8 };
-            int[] left_requirements = { 0, 1, 2, 3, 4, 5 };
-
-            // Get Similarities Between Tiles
-            List<int> tile_similarities = CompareTiles(tile, pair.Value);
-
-            // Check Up Requirements, Add If Satisfied
-            bool up_requirements_met = true;
-            foreach(int requirement in up_requirements)
-            { 
-                if(!tile_similarities.Contains(requirement))
+            if (cell.collapsed == false)
+            {
+                // Skip cells with no options (contradictions)
+                if (cell.collapse_options.Count == 0)
                 {
-                    up_requirements_met = false;
-                    break;
+                    continue;
+                }
+
+                if (cell.collapse_options.Count < lowest_entropy)
+                {
+                    // Set Lowest Entropy & Index Of Said Lowest Entropy
+                    lowest_entropy = cell.collapse_options.Count;
+                    cell_index = cell.cell_index;
                 }
             }
-            if(up_requirements_met)
+        }
+
+        if (cell_index == -1)
+        {
+            UnityEngine.Debug.Log("No valid cell left to collapse.");
+            return;
+        }
+
+        // Define Selected Cell & Tile Chosen
+        Cell selected_cell = index_to_cell[cell_index];
+
+        if (selected_cell.collapse_options.Count == 0)
+        {
+            UnityEngine.Debug.LogError("Contradiction: Cell has no valid options!");
+            return;
+        }
+
+        int selected_option_index = UnityEngine.Random.Range(0, selected_cell.collapse_options.Count);
+        Tile tile_to_collapse_cell_to = selected_cell.collapse_options[selected_option_index];
+        selected_cell.collapsed_tile = tile_to_collapse_cell_to;
+
+        // Update Tile Color
+        int center_index = pattern_size + 1;        Color tile_center_color = selected_cell.collapsed_tile.tile_pixels[center_index];
+        selected_cell.UpdateCell(tile_center_color);
+
+        // Wipe Options & Collapse Tile
+        selected_cell.collapse_options.Clear();
+        selected_cell.collapsed = true;
+
+        ReduceEntropy(selected_cell);
+
+        timer.Stop();
+        //UnityEngine.Debug.Log($"StepWFC took {timer.ElapsedMilliseconds} ms");
+
+        Invoke(nameof(StepWFC), 0.05f);
+    }
+
+    private void ReduceEntropy(Cell _cell)
+    {
+        foreach(DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
+        {
+            // Calculate Neighbor Position
+            Vector2Int neighborPos = new Vector2Int(_cell.x, _cell.y);
+            switch (direction)
             {
-                tile.addAdjacency(DIRECTIONS.UP, pair.Value);
+                case DIRECTIONS.UP: neighborPos.y -= 1; break;
+                case DIRECTIONS.DOWN: neighborPos.y += 1; break;
+                case DIRECTIONS.LEFT: neighborPos.x -= 1; break;
+                case DIRECTIONS.RIGHT: neighborPos.x += 1; break;
             }
 
-            // Check Right Requirements, Add If Satisfied
-            bool right_requirements_met = true;
-            foreach (int requirement in right_requirements)
+            // Skip This Iteration If Neighbor Is Out Of Bounds
+            if (!position_to_cell.ContainsKey(neighborPos))
             {
-                if (!tile_similarities.Contains(requirement))
-                {
-                    right_requirements_met = false;
-                    break;
-                }
-            }
-            if (right_requirements_met)
-            {
-                tile.addAdjacency(DIRECTIONS.RIGHT, pair.Value);
+                continue;
             }
 
-            // Check Down Requirements, Add If Satisfied
-            bool down_requirements_met = true;
-            foreach (int requirement in down_requirements)
+            // Get Neighbor In Direction, Skip If Already Collapsed
+            Cell direction_neighbor = _cell.FetchNeighbor(position_to_cell, direction);
+            if(direction_neighbor.collapsed == true)
             {
-                if (!tile_similarities.Contains(requirement))
-                {
-                    down_requirements_met = false;
-                    break;
-                }
-            }
-            if (down_requirements_met)
-            {
-                tile.addAdjacency(DIRECTIONS.DOWN, pair.Value);
+                continue;
             }
 
-            // Check Left Requirements, Add If Satisfied
-            bool left_requirements_met = true;
-            foreach (int requirement in left_requirements)
-            {
-                if (!tile_similarities.Contains(requirement))
-                {
-                    left_requirements_met = false;
-                    break;
-                }
-            }
-            if (left_requirements_met)
-            {
-                tile.addAdjacency(DIRECTIONS.LEFT, pair.Value);
-            }
+            // Get Possibilites
+            List<Tile> collapsed_neighbor_possibilites = _cell.collapsed_tile.adjacencies[(int)direction];
+
+            // Remove All Possibilities Which Don't Exist Due To New Data
+            direction_neighbor.collapse_options.RemoveAll(
+                collapse_possibility => !collapsed_neighbor_possibilites.Contains(collapse_possibility)
+            );
         }
     }
 
+    private void GenerateAdjacencies(Texture2D bitmap, Tile tile, int pattern_size)
+    {
+        foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
+        {
+            Tile other = pair.Value;
+
+            // Check UP: tile's top (pattern_size-1) rows must match other's bottom (pattern_size-1) rows
+            bool up_valid = true;
+            for (int y = 0; y < pattern_size - 1 && up_valid; y++)
+            {
+                for (int x = 0; x < pattern_size; x++)
+                {
+                    int tile_index = y * pattern_size + x;           // rows 0, 1 of tile
+                    int other_index = (y + 1) * pattern_size + x;    // rows 1, 2 of other
+                    if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
+                    {
+                        up_valid = false;
+                        break;
+                    }
+                }
+            }
+            if (up_valid) tile.addAdjacency(DIRECTIONS.UP, other);
+
+            // Check DOWN: tile's bottom (pattern_size-1) rows must match other's top (pattern_size-1) rows
+            bool down_valid = true;
+            for (int y = 0; y < pattern_size - 1 && down_valid; y++)
+            {
+                for (int x = 0; x < pattern_size; x++)
+                {
+                    int tile_index = (y + 1) * pattern_size + x;     // rows 1, 2 of tile
+                    int other_index = y * pattern_size + x;          // rows 0, 1 of other
+                    if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
+                    {
+                        down_valid = false;
+                        break;
+                    }
+                }
+            }
+            if (down_valid) tile.addAdjacency(DIRECTIONS.DOWN, other);
+
+            // Check LEFT: tile's left (pattern_size-1) columns must match other's right (pattern_size-1) columns
+            bool left_valid = true;
+            for (int x = 0; x < pattern_size - 1 && left_valid; x++)
+            {
+                for (int y = 0; y < pattern_size; y++)
+                {
+                    int tile_index = y * pattern_size + x;           // cols 0, 1 of tile
+                    int other_index = y * pattern_size + (x + 1);    // cols 1, 2 of other
+                    if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
+                    {
+                        left_valid = false;
+                        break;
+                    }
+                }
+            }
+            if (left_valid) tile.addAdjacency(DIRECTIONS.LEFT, other);
+
+            // Check RIGHT: tile's right (pattern_size-1) columns must match other's left (pattern_size-1) columns
+            bool right_valid = true;
+            for (int x = 0; x < pattern_size - 1 && right_valid; x++)
+            {
+                for (int y = 0; y < pattern_size; y++)
+                {
+                    int tile_index = y * pattern_size + (x + 1);     // cols 1, 2 of tile
+                    int other_index = y * pattern_size + x;          // cols 0, 1 of other
+                    if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
+                    {
+                        right_valid = false;
+                        break;
+                    }
+                }
+            }
+            if (right_valid) tile.addAdjacency(DIRECTIONS.RIGHT, other);
+        }
+    }
     private List<int> CompareTiles(Tile tile_a, Tile tile_b)
     {
         List<int> similarities = new List<int>();
@@ -279,7 +478,6 @@ public class WaveFunctionCollapse : MonoBehaviour
         return similarities;
     }
 
-
     private Texture2D LoadBitmap(string file_name)
     {
         string path = "Assets/WFC_Bitmaps/" + file_name;
@@ -291,17 +489,21 @@ public class WaveFunctionCollapse : MonoBehaviour
         Color pixel = texture.GetPixel(0, 0);
         return texture;
     }
+
     private Color[] PullPattern(Texture2D texture, int pattern_size, Vector2Int corner)
     {
-        Color[] pattern = new Color[9];
+        Color[] pattern = new Color[pattern_size * pattern_size];
 
-        // Should Make The Pattern Generated Like Reading (Left->Right | Up->Down)
+       // Should Make The Pattern Generated Like Reading (Left->Right | Up->Down)
         int pattern_index = 0;
         for(int y = 0; y < pattern_size; y++)
         {
             for (int x = 0; x < pattern_size; x++)
             {
-                pattern[pattern_index] = texture.GetPixel(corner.x + x, corner.y + y);
+                int final_x = corner.x + x;
+                int final_y = corner.y + y;
+
+                pattern[pattern_index] = texture.GetPixel(final_x % texture.width, final_y % texture.height);
                 pattern_index++;
             }
         }
@@ -309,6 +511,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         return pattern;
     }
+    
     private int HashPixels(Color[] pixels)
     {
         string pixel_string = "";
@@ -339,7 +542,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
-    private void DisplayPatterns(int bitmap_depth)
+    private void DisplayPatterns(int bitmap_depth, int pattern_size)
     {
         int x = 0;
         int z = 0;
@@ -347,6 +550,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         Vector3 tile_center = new Vector3();
         tile_center.x = x;
         tile_center.z = z;
+
+        float pixel_size = 0.33f;
+        float pattern_depth = pixel_size * pattern_size;
 
         // Loop Through All Tiles & Display Pixels Properly
         foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
@@ -363,8 +569,8 @@ public class WaveFunctionCollapse : MonoBehaviour
                 GameObject pixel = Instantiate(pixel_prefab);
                 Vector3 pixel_spawn = new Vector3();
 
-                float spawn_x = (tile_center.x - 0.33f) + (0.33f*tile_x);
-                float spawn_z = (tile_center.z - 0.33f) + (0.33f*tile_z);
+                float spawn_x = (tile_center.x - pattern_depth / 2 + pixel_size/2) + (pixel_size * tile_x);
+                float spawn_z = (tile_center.z - pattern_depth / 2 + pixel_size/2) + (pixel_size * tile_z);
 
                 pixel_spawn.x = spawn_x;
                 pixel_spawn.y = 0.05f;
@@ -377,7 +583,7 @@ public class WaveFunctionCollapse : MonoBehaviour
 
                 tile_x++;
 
-                if(tile_x == 3)
+                if(tile_x == pattern_size)
                 {
                     tile_x = 0;
                     tile_z++;
@@ -391,9 +597,9 @@ public class WaveFunctionCollapse : MonoBehaviour
 
             x++;
 
-            tile_center.x = x * 1.1f;
+            tile_center.x = x * (pattern_depth*1.1f);
             tile_center.y = 0;
-            tile_center.z = z * 1.1f;
+            tile_center.z = z * (pattern_depth * 1.1f);
         }
     }
 }
