@@ -17,9 +17,8 @@ public class WaterLevel : MonoBehaviour
     [Tooltip("Material for the water plane (assign a blue material)")]
     public Material waterMaterial;
 
-    [Tooltip("Offset water plane slightly above calculated height to prevent z-fighting")]
-    [Range(0f, 5f)]
-    public float waterOffset = 0.5f;
+    [Tooltip("Keep water plane at exact terrain height ratio (no offset)")]
+    public bool dynamicHeight = true;
 
     private GameObject waterPlane;
 
@@ -32,7 +31,7 @@ public class WaterLevel : MonoBehaviour
     {
         if (terrain == null)
         {
-            //Debug.LogError("Assign a Terrain first.");
+            Debug.LogError("Assign a Terrain first.");
             return;
         }
 
@@ -50,7 +49,9 @@ public class WaterLevel : MonoBehaviour
         // Calculate water height in world units
         TerrainData terrainData = terrain.terrainData;
         Vector3 terrainPos = terrain.transform.position;
-        float waterHeight = terrainPos.y + (waterLevel * terrainData.size.y) + waterOffset;
+
+        // Water level is percentage of terrain height (0.15 = 15% of max terrain height)
+        float waterHeight = terrainPos.y + (waterLevel * terrainData.size.y);
 
         // Position and scale the plane
         Vector3 terrainSize = terrainData.size;

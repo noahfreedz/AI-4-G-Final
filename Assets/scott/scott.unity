@@ -334,7 +334,7 @@ MonoBehaviour:
   terrain: {fileID: 1894741511}
   waterLevel: 0.15
   waterMaterial: {fileID: 0}
-  waterOffset: 0.5
+  dynamicHeight: 1
 --- !u!114 &1462394439
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -372,7 +372,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1462394437}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1901.1034, y: 837.42163, z: 4955.789}
+  m_LocalPosition: {x: 1901.1034, y: 1041, z: 4955.789}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -439,7 +439,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1894741510}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: -1069, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -461,4 +461,4 @@ MonoBehaviour:
   terrain: {fileID: 0}
   waterLevel: 0.15
   waterMaterial: {fileID: 0}
-  waterOffset: 0.5
+  dynamicHeight: 1
