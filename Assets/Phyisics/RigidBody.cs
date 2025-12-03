@@ -1,5 +1,6 @@
 using UnityEngine;
 using Unity.Mathematics;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 
 public static class QuaternionExtensions
@@ -23,24 +24,24 @@ public static class QuaternionExtensions
 public class RigidBody : MonoBehaviour
 {
 
-    private Vector3 position;
-    private Vector3 velocity;
-    private Vector3 acceleration;
+    public Vector3 position;
+    public Vector3 velocity;
+    public Vector3 acceleration;
 
-    private float linearDamping;
-    private float inverseMass;
+    public float linearDamping;
+    public float inverseMass;
 
-    private Vector3 forceAccum;
+    public Vector3 forceAccum;
 
-    private Quaternion orientation;
-    private Vector3 angularVelocity;
-    private Vector3 torqueAccum;
+    public Quaternion orientation;
+    public Vector3 angularVelocity;
+    public Vector3 torqueAccum;
 
-    private float3x3 inverseInertiaTensor;
-    private float angularDamping;
-    private float3x3 inverseInertiaTensorWorld;
+    public float3x3 inverseInertiaTensor;
+    public float angularDamping;
+    public float3x3 inverseInertiaTensorWorld;
 
-    private float4x4 transformMatrix;
+    public float4x4 transformMatrix;
 
     
 
@@ -108,7 +109,7 @@ public class RigidBody : MonoBehaviour
         clearAccumulators();
     }
 
-    void calculateDerivedData()
+    public void calculateDerivedData()
     {
         orientation = Quaternion.Normalize(orientation);
 

@@ -22,26 +22,31 @@ public class RawHeightmapImporter : MonoBehaviour
     public List<HeightmapLayer> heightmapLayers = new List<HeightmapLayer>();
     public int rawResolution = 512;
 
+    [Header("Octaves Settings")]
+    [Tooltip("Number of noise layers to combine (more = more detail)")]
+    [Range(1, 6)]
+    public int octaves = 3;
+
+    [Tooltip("Starting frequency multiplier")]
+    [Range(0.5f, 4f)]
+    public float baseFrequency = 1f;
+
+    [Tooltip("Frequency multiplier for each octave (typically 2.0)")]
+    [Range(1.5f, 3f)]
+    public float lacunarity = 2f;
+
+    [Tooltip("Amplitude ratio between octaves (typically 0.5, lower = smoother)")]
+    [Range(0.2f, 0.8f)]
+    public float persistence = 0.5f;
+
     [Header("Controls")]
     [Tooltip("Overall height/intensity. 0 = completely flat")]
     [Range(0f, 2f)]
     public float heightScale = 0.5f;
 
-    [Tooltip("Amplify height differences. >1 = steeper mountains/deeper valleys")]
+    [Tooltip("Reshape elevation curve. >1 = deeper valleys, <1 = flatter peaks")]
     [Range(0.1f, 5f)]
-    public float heightContrast = 1f;
-
-    [Tooltip("Shift entire heightmap up/down. 0.5 = centered, <0.5 = lower, >0.5 = higher")]
-    [Range(0f, 1f)]
-    public float heightOffset = 0.5f;
-
-    [Tooltip("Feature coverage. 0 = completely flat, 1 = full coverage")]
-    [Range(0f, 1f)]
-    public float featureDensity = 1f;
-
-    [Tooltip("Size of density clusters (smaller = more scattered features)")]
-    [Range(0.001f, 0.5f)]
-    public float densityScale = 0.1f;
+    public float redistributionExponent = 1f;
 
     [Header("Post-Processing")]
     public float smoothAmount = 0f;
@@ -59,7 +64,6 @@ public class RawHeightmapImporter : MonoBehaviour
             Debug.LogError("Assign a Terrain and at least one heightmap layer first.");
             return;
         }
-
 
         TerrainData terrainData = terrain.terrainData;
         int terrainResolution = terrainData.heightmapResolution;
@@ -97,6 +101,7 @@ public class RawHeightmapImporter : MonoBehaviour
                 }
             }
         }
+
         if (smoothAmount > 0)
         {
             for (int i = 0; i < Mathf.RoundToInt(smoothAmount); i++)
@@ -107,7 +112,7 @@ public class RawHeightmapImporter : MonoBehaviour
 
         terrainData.SetHeights(0, 0, combined);
 
-        Debug.Log($"Heightmap applied - {heightmapLayers.Count} layers, Scale: {heightScale}, Density: {featureDensity}");
+        Debug.Log($"Heightmap applied - {heightmapLayers.Count} layers, Octaves: {octaves}");
 #endif
     }
 
@@ -122,31 +127,17 @@ public class RawHeightmapImporter : MonoBehaviour
 
         TerrainData terrainData = terrain.terrainData;
         int terrainResolution = terrainData.heightmapResolution;
-
-        // Get current terrain heights
         float[,] currentHeights = terrainData.GetHeights(0, 0, terrainResolution, terrainResolution);
 
-        // Apply random variations
         for (int y = 0; y < terrainResolution; y++)
         {
             for (int x = 0; x < terrainResolution; x++)
             {
-                // Density mask - only randomize where features should be
-                float densityNoise = Mathf.PerlinNoise(x * densityScale, y * densityScale);
-
-                if (densityNoise > (1f - featureDensity))
-                {
-                    float fadeFactor = Mathf.Clamp01((densityNoise - (1f - featureDensity)) / Mathf.Max(featureDensity, 0.01f));
-
-                    // Create random variation (can go up or down)
-                    float randomVariation = (Random.value - 0.5f) * randomStrength * heightScale * fadeFactor;
-
-                    currentHeights[y, x] = Mathf.Clamp01(currentHeights[y, x] + randomVariation);
-                }
+                float randomVariation = (Random.value - 0.5f) * randomStrength * heightScale;
+                currentHeights[y, x] = Mathf.Clamp01(currentHeights[y, x] + randomVariation);
             }
         }
 
-        // Smooth if needed
         if (smoothAmount > 0)
         {
             for (int i = 0; i < Mathf.RoundToInt(smoothAmount); i++)
@@ -157,7 +148,7 @@ public class RawHeightmapImporter : MonoBehaviour
 
         terrainData.SetHeights(0, 0, currentHeights);
 
-        Debug.Log($"Random variations applied - Strength: {randomStrength}, Density: {featureDensity}");
+        Debug.Log($"Random variations applied - Strength: {randomStrength}");
 #endif
     }
 
@@ -166,38 +157,56 @@ public class RawHeightmapImporter : MonoBehaviour
         float[,] result = new float[terrainResolution, terrainResolution];
         int rawRes = rawHeights.GetLength(0);
 
-        // If either control is at 0, return flat terrain
-        if (heightScale <= 0f || featureDensity <= 0f)
+        if (heightScale <= 0f)
         {
-            return result; // Already initialized to 0
+            return result;
+        }
+
+        // Calculate total amplitude for normalization
+        float totalAmplitude = 0f;
+        float amplitude = 1f;
+        for (int i = 0; i < octaves; i++)
+        {
+            totalAmplitude += amplitude;
+            amplitude *= persistence;
         }
 
         for (int y = 0; y < terrainResolution; y++)
         {
             for (int x = 0; x < terrainResolution; x++)
             {
-                // Density mask - determines if feature appears here
-                float densityNoise = Mathf.PerlinNoise(x * densityScale, y * densityScale);
+                // Sample heightmap with multiple octaves
+                float combinedHeight = 0f;
+                float currentAmplitude = 1f;
+                float currentFrequency = baseFrequency;
 
-                // Only apply height if density mask passes threshold
-                if (densityNoise > (1f - featureDensity))
+                for (int octave = 0; octave < octaves; octave++)
                 {
-                    // Calculate fade at edges of features
-                    float fadeFactor = Mathf.Clamp01((densityNoise - (1f - featureDensity)) / Mathf.Max(featureDensity, 0.01f));
-
-                    // Sample from heightmap
                     float normalizedX = x / (float)terrainResolution;
                     float normalizedY = y / (float)terrainResolution;
 
-                    float sampledX = normalizedX * rawRes;
-                    float sampledY = normalizedY * rawRes;
+                    float sampledX = normalizedX * rawRes * currentFrequency;
+                    float sampledY = normalizedY * rawRes * currentFrequency;
 
                     float sampledHeight = SampleBilinear(rawHeights, sampledX, sampledY);
 
-                    // Apply height scale and fade
-                    result[y, x] = sampledHeight * heightScale * fadeFactor;
+                    combinedHeight += sampledHeight * currentAmplitude;
+
+                    currentFrequency *= lacunarity;
+                    currentAmplitude *= persistence;
                 }
-                // else stays at 0 (flat)
+
+                // Normalize by total amplitude
+                combinedHeight /= totalAmplitude;
+
+                // Apply redistribution (power curve for flat valleys)
+                if (redistributionExponent != 1f)
+                {
+                    combinedHeight = Mathf.Pow(combinedHeight, redistributionExponent);
+                }
+
+                // Apply height scale
+                result[y, x] = combinedHeight * heightScale;
             }
         }
 
@@ -259,7 +268,6 @@ public class RawHeightmapImporter : MonoBehaviour
     {
         int res = map.GetLength(0);
 
-        // Wrap coordinates for seamless tiling
         x = Mathf.Repeat(x, res - 0.001f);
         y = Mathf.Repeat(y, res - 0.001f);
 

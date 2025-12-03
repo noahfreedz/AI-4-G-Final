@@ -228,7 +228,6 @@ GameObject:
   - component: {fileID: 850480926}
   - component: {fileID: 850480925}
   - component: {fileID: 850480924}
-  - component: {fileID: 850480927}
   m_Layer: 0
   m_Name: Main Camera
   m_TagString: MainCamera
@@ -294,21 +293,55 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 850480923}
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: -10}
+  m_LocalRotation: {x: 0.2060328, y: -0, z: -0, w: 0.9785451}
+  m_LocalPosition: {x: 1575, y: 325, z: 3947}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
   m_RootOrder: 0
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &850480927
+  m_LocalEulerAnglesHint: {x: 23.78, y: 0, z: 0}
+--- !u!1 &1462394437
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1462394440}
+  - component: {fileID: 1462394439}
+  - component: {fileID: 1462394438}
+  m_Layer: 0
+  m_Name: Game Manager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1462394438
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 850480923}
+  m_GameObject: {fileID: 1462394437}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d28d4d8108ab8e24aa6ba03133f38fd8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  terrain: {fileID: 1894741511}
+  waterLevel: 0.15
+  waterMaterial: {fileID: 0}
+  waterOffset: 0.5
+--- !u!114 &1462394439
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462394437}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 15ae4539805c4e64e953b46a15d89f71, type: 3}
@@ -317,17 +350,35 @@ MonoBehaviour:
   terrain: {fileID: 1894741511}
   heightmapLayers:
   - rawFile: {fileID: 102900000, guid: 650c2156ba0f0044e9efa6f6f411ce98, type: 3}
-    blendAmount: 0.521
+    blendAmount: 0.476
   - rawFile: {fileID: 102900000, guid: 357a2cb2308d30b46946d9cab6f77471, type: 3}
-    blendAmount: 0.74
+    blendAmount: 0.452
+  - rawFile: {fileID: 102900000, guid: ce6384f3e48ece94c9597a97e005ebc5, type: 3}
+    blendAmount: 0.4
   rawResolution: 512
-  heightScale: 1.23
-  heightContrast: 4.06
-  heightOffset: 0.88
-  featureDensity: 1
-  densityScale: 0.382
-  smoothAmount: 7.86
-  randomStrength: 1
+  octaves: 6
+  baseFrequency: 4
+  lacunarity: 2.78
+  persistence: 0.44
+  heightScale: 0.48
+  redistributionExponent: 1
+  smoothAmount: 1.98
+  randomStrength: 0.3
+--- !u!4 &1462394440
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462394437}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 1901.1034, y: 837.42163, z: 4955.789}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 3
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1894741510
 GameObject:
   m_ObjectHideFlags: 0
@@ -338,6 +389,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1894741512}
   - component: {fileID: 1894741511}
+  - component: {fileID: 1894741513}
   m_Layer: 0
   m_Name: Terrain
   m_TagString: Untagged
@@ -394,3 +446,19 @@ Transform:
   m_Father: {fileID: 0}
   m_RootOrder: 2
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1894741513
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1894741510}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d28d4d8108ab8e24aa6ba03133f38fd8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  terrain: {fileID: 0}
+  waterLevel: 0.15
+  waterMaterial: {fileID: 0}
+  waterOffset: 0.5
