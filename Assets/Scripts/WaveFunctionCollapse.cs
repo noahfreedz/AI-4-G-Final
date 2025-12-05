@@ -387,81 +387,84 @@ public class WaveFunctionCollapse : MonoBehaviour
         Invoke(nameof(StepWFC), 0.0001f);
     }
 
-    private void ReduceEntropy(Cell startCell)
+    private void ReduceEntropy(Cell start_cell)
     {
-        Queue<Cell> toProcess = new Queue<Cell>();
-        HashSet<int> inQueue = new HashSet<int>();
+        
+        Queue<Cell> cells_to_proccess = new Queue<Cell>();
+        HashSet<int> cells_in_queue = new HashSet<int>();
 
-        toProcess.Enqueue(startCell);
-        inQueue.Add(startCell.cell_index);
+        // Start By Adding Start Cell
+        cells_to_proccess.Enqueue(start_cell);
+        cells_in_queue.Add(start_cell.cell_index);
 
-        while (toProcess.Count > 0)
+        while (cells_to_proccess.Count > 0)
         {
-            Cell current = toProcess.Dequeue();
-            inQueue.Remove(current.cell_index);
+            Cell current = cells_to_proccess.Dequeue();
+            cells_in_queue.Remove(current.cell_index);
 
             foreach (DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
             {
                 // Calculate Neighbor Position
-                Vector2Int neighborPos = new Vector2Int(current.x, current.y);
+                Vector2Int neighbor_position = new Vector2Int(current.x, current.y);
                 switch (direction)
                 {
-                    case DIRECTIONS.UP: neighborPos.y -= 1; break;
-                    case DIRECTIONS.DOWN: neighborPos.y += 1; break;
-                    case DIRECTIONS.LEFT: neighborPos.x -= 1; break;
-                    case DIRECTIONS.RIGHT: neighborPos.x += 1; break;
+                    case DIRECTIONS.UP: neighbor_position.y -= 1; break;
+                    case DIRECTIONS.DOWN: neighbor_position.y += 1; break;
+                    case DIRECTIONS.LEFT: neighbor_position.x -= 1; break;
+                    case DIRECTIONS.RIGHT: neighbor_position.x += 1; break;
                 }
 
-                // Skip if neighbor is out of bounds
-                if (!position_to_cell.ContainsKey(neighborPos))
+                // Skip If Its Not In Bounds
+                if (!position_to_cell.ContainsKey(neighbor_position))
                 {
                     continue;
                 }
 
-                Cell neighbor = position_to_cell[neighborPos];
+                // Get Neighbor Cell
+                Cell neighbor = position_to_cell[neighbor_position];
 
-                // Skip if already collapsed
+                // Skip If Neighbor Cell Already Collapsed
                 if (neighbor.collapsed)
                 {
                     continue;
                 }
 
-                // Build set of valid tiles for this neighbor based on current cell's possibilities
-                HashSet<Tile> validTiles = new HashSet<Tile>();
+                // Build HashSet of Valid Tile For Neighbor Cell Based On Current Cell's Possibilities
+                HashSet<Tile> valid_tiles = new HashSet<Tile>();
 
                 if (current.collapsed)
                 {
-                    // Current cell is collapsed - use its tile's adjacencies
+                    // If Current Cell Is Collapsed -> Use Collapsed Adjacencies
                     foreach (Tile adj in current.collapsed_tile.adjacencies[(int)direction])
                     {
-                        validTiles.Add(adj);
+                        valid_tiles.Add(adj);
                     }
                 }
                 else
                 {
-                    // Current cell not collapsed - union of all possible adjacencies
+                    // If Current cell Not Collapsed - Add All Possible Adjacnecies
                     foreach (Tile option in current.collapse_options)
                     {
                         foreach (Tile adj in option.adjacencies[(int)direction])
                         {
-                            validTiles.Add(adj);
+                            valid_tiles.Add(adj);
                         }
                     }
                 }
 
                 // Track count before removal
-                int previousCount = neighbor.collapse_options.Count;
+                int old_collapse_count = neighbor.collapse_options.Count;
 
                 // Remove invalid options
-                neighbor.collapse_options.RemoveAll(tile => !validTiles.Contains(tile));
+                neighbor.collapse_options.RemoveAll(tile => !valid_tiles.Contains(tile));
 
                 // If options were reduced, add neighbor to queue (if not already there)
-                if (neighbor.collapse_options.Count < previousCount)
+                if (neighbor.collapse_options.Count < old_collapse_count)
                 {
-                    if (!inQueue.Contains(neighbor.cell_index))
+                    if (!cells_in_queue.Contains(neighbor.cell_index))
                     {
-                        toProcess.Enqueue(neighbor);
-                        inQueue.Add(neighbor.cell_index);
+                        cells_to_proccess.Enqueue(neighbor);
+                        cells_in_queue.Add(neighbor.cell_index);
                     }
                 }
             }
