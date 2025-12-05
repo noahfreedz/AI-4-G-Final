@@ -9,7 +9,7 @@ public class WaterLevel : MonoBehaviour
     public Terrain terrain;
 
     [Header("Water Settings")]
-    [Tooltip("Water level threshold (0-1). Elevation below this = underwater")]
+    [Tooltip("0 = lowest point on terrain, 1 = highest point actually used on terrain")]
     [Range(0f, 1f)]
     public float waterLevel = 0.15f;
 
@@ -17,16 +17,29 @@ public class WaterLevel : MonoBehaviour
     [Tooltip("Material for the water plane (assign a blue material)")]
     public Material waterMaterial;
 
-    [Tooltip("Keep water plane at exact terrain height ratio (no offset)")]
+    [Tooltip("If true, water plane height will update when you change waterLevel in the inspector")]
     public bool dynamicHeight = true;
 
     private GameObject waterPlane;
 
+    // Cached water height so we don't recompute all the time
+    private float cachedWaterHeight = float.NaN;
+
     void Start()
     {
+        RecalculateWaterHeight();
         CreateWaterPlane();
     }
 
+    void OnValidate()
+    {
+        // Whenever you tweak values in the inspector, invalidate cache
+        cachedWaterHeight = float.NaN;
+    }
+
+    /// <summary>
+    /// Creates or recreates the water plane at the correct height.
+    /// </summary>
     public void CreateWaterPlane()
     {
         if (terrain == null)
@@ -38,23 +51,27 @@ public class WaterLevel : MonoBehaviour
         // Remove existing water plane if it exists
         if (waterPlane != null)
         {
-            Destroy(waterPlane);
+            DestroyImmediate(waterPlane);
         }
+
+        // Make sure we have a correct water height
+        RecalculateWaterHeight();
 
         // Create the water plane
         waterPlane = GameObject.CreatePrimitive(PrimitiveType.Plane);
         waterPlane.name = "Water Plane";
-        waterPlane.transform.SetParent(transform);
 
-        // Calculate water height in world units
+        // Optional: don't parent if your WaterLevel object is moved/scaled weirdly
+        // waterPlane.transform.SetParent(transform);
+        waterPlane.transform.SetParent(transform, true);
+
         TerrainData terrainData = terrain.terrainData;
         Vector3 terrainPos = terrain.transform.position;
-
-        // Water level is percentage of terrain height (0.15 = 15% of max terrain height)
-        float waterHeight = terrainPos.y + (waterLevel * terrainData.size.y);
-
-        // Position and scale the plane
         Vector3 terrainSize = terrainData.size;
+
+        float waterHeight = GetWaterHeight();
+
+        // Position plane centered over the terrain
         waterPlane.transform.position = new Vector3(
             terrainPos.x + terrainSize.x / 2f,
             waterHeight,
@@ -90,50 +107,106 @@ public class WaterLevel : MonoBehaviour
             waterPlane.GetComponent<Renderer>().material = simpleMaterial;
         }
 
-        Debug.Log($"Water plane created at height: {waterHeight} (water level: {waterLevel})");
+        Debug.Log($"Water plane created at world height: {waterHeight} (normalized waterLevel: {waterLevel})");
     }
 
     public void RemoveWaterPlane()
     {
         if (waterPlane != null)
         {
-            Destroy(waterPlane);
+            DestroyImmediate(waterPlane);
+            waterPlane = null;
             Debug.Log("Water plane removed.");
         }
     }
 
+    /// <summary>
+    /// Returns true if the given world position is below the water surface.
+    /// </summary>
     public bool IsUnderwater(Vector3 worldPosition)
     {
         if (terrain == null) return false;
 
-        TerrainData terrainData = terrain.terrainData;
-        Vector3 terrainPos = terrain.transform.position;
-
-        // Get terrain height at this world position
-        Vector3 localPos = worldPosition - terrainPos;
-        float normalizedX = localPos.x / terrainData.size.x;
-        float normalizedZ = localPos.z / terrainData.size.z;
-
-        if (normalizedX < 0 || normalizedX > 1 || normalizedZ < 0 || normalizedZ > 1)
-            return false;
-
-        float terrainHeight = terrain.SampleHeight(worldPosition);
-        float elevation = terrainHeight / terrainData.size.y;
-
-        return elevation < waterLevel;
+        float waterHeight = GetWaterHeight();
+        return worldPosition.y < waterHeight;
     }
 
+    /// <summary>
+    /// Get the world-space Y height of the water surface.
+    /// </summary>
     public float GetWaterHeight()
     {
-        if (terrain == null) return 0f;
+        if (float.IsNaN(cachedWaterHeight))
+        {
+            RecalculateWaterHeight();
+        }
+        return cachedWaterHeight;
+    }
+
+    /// <summary>
+    /// Recalculate water height based on actual sampled terrain heights.
+    /// This accounts for however you've sculpted the terrain, not just size.y.
+    /// </summary>
+    private void RecalculateWaterHeight()
+    {
+        if (terrain == null)
+        {
+            cachedWaterHeight = 0f;
+            return;
+        }
 
         TerrainData terrainData = terrain.terrainData;
         Vector3 terrainPos = terrain.transform.position;
 
-        return terrainPos.y + (waterLevel * terrainData.size.y);
+        // Sample across the terrain to find the min and max *actual* heights
+        const int samplesPerAxis = 64; // can tweak if you want more/less precision
+        float minHeight = float.PositiveInfinity;
+        float maxHeight = float.NegativeInfinity;
+
+        for (int z = 0; z < samplesPerAxis; z++)
+        {
+            float tz = (float)z / (samplesPerAxis - 1);
+            for (int x = 0; x < samplesPerAxis; x++)
+            {
+                float tx = (float)x / (samplesPerAxis - 1);
+
+                // World-space sample position on the terrain
+                float worldX = terrainPos.x + tx * terrainData.size.x;
+                float worldZ = terrainPos.z + tz * terrainData.size.z;
+
+                float h = terrain.SampleHeight(new Vector3(worldX, 0f, worldZ));
+                if (h < minHeight) minHeight = h;
+                if (h > maxHeight) maxHeight = h;
+            }
+        }
+
+        if (!float.IsFinite(minHeight) || !float.IsFinite(maxHeight))
+        {
+            cachedWaterHeight = terrainPos.y;
+            return;
+        }
+
+        // Now waterLevel = 0 means minHeight, 1 means maxHeight
+        cachedWaterHeight = Mathf.Lerp(minHeight, maxHeight, waterLevel);
     }
 
 #if UNITY_EDITOR
+    void Update()
+    {
+        // In editor, if you slide waterLevel and want the plane to move live
+        if (dynamicHeight && !Application.isPlaying)
+        {
+            RecalculateWaterHeight();
+
+            if (waterPlane != null)
+            {
+                Vector3 pos = waterPlane.transform.position;
+                pos.y = GetWaterHeight();
+                waterPlane.transform.position = pos;
+            }
+        }
+    }
+
     void OnDrawGizmosSelected()
     {
         if (terrain == null) return;
@@ -142,9 +215,9 @@ public class WaterLevel : MonoBehaviour
         Vector3 terrainPos = terrain.transform.position;
         Vector3 terrainSize = terrainData.size;
 
-        // Draw water level as a transparent blue box
-        float waterHeight = terrainPos.y + (waterLevel * terrainSize.y);
+        float waterHeight = GetWaterHeight();
 
+        // Draw water level as a transparent blue box
         Gizmos.color = new Color(0.2f, 0.5f, 0.8f, 0.3f);
         Vector3 center = new Vector3(
             terrainPos.x + terrainSize.x / 2f,

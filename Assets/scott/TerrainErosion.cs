@@ -1,301 +1,496 @@
 using UnityEngine;
+using System.Collections.Generic;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
 
 public class TerrainErosion : MonoBehaviour
 {
-    [Header("Terrain")]
+    [Header("References")]
     public Terrain terrain;
+    [Tooltip("WaterLevel script that defines the water height")]
+    public WaterLevel waterLevel;
 
-    [Header("Hydraulic Erosion (Water Flow)")]
-    [Tooltip("Number of water droplets to simulate")]
-    [Range(1000, 100000)]
-    public int dropletCount = 50000;
+    [Header("Underwater Erosion Settings")]
+    [Tooltip("How much to erode per step (depth in normalized units)")]
+    [Range(0.0001f, 0.01f)]
+    public float erosionStrength = 0.002f;
 
-    [Tooltip("How many steps each droplet takes")]
-    [Range(4, 64)]
-    public int maxDropletLifetime = 30;
+    [Tooltip("Maximum distance from water edge to erode (in terrain cells)")]
+    [Range(1, 50)]
+    public int erosionDepth = 10;
 
-    [Tooltip("How much sediment a droplet can carry")]
-    [Range(0.01f, 1f)]
-    public float sedimentCapacity = 0.3f;
-
-    [Tooltip("How fast droplets pick up sediment")]
-    [Range(0.1f, 1f)]
-    public float erosionRate = 0.5f;
-
-    [Tooltip("How fast droplets drop sediment")]
-    [Range(0.1f, 1f)]
-    public float depositionRate = 0.3f;
-
-    [Tooltip("How fast water evaporates")]
+    [Tooltip("Maximum slope that can be eroded (prevents cutting down mountains)")]
     [Range(0.01f, 0.5f)]
-    public float evaporationRate = 0.02f;
+    public float maxErodableSlope = 0.15f;
 
-    [Tooltip("Minimum slope required for erosion")]
-    [Range(0.01f, 0.2f)]
-    public float minSlope = 0.01f;
+    [Tooltip("Prefer eroding deeper areas (creates channels toward lowest points)")]
+    public bool flowTowardDeepest = true;
 
-    [Tooltip("Initial water amount per droplet")]
-    [Range(0.5f, 2f)]
-    public float waterAmount = 1f;
+    [Tooltip("Smoothing iterations after erosion")]
+    [Range(0, 5)]
+    public int smoothingPasses = 1;
 
-    [Header("Thermal Erosion (Slope Weathering)")]
-    [Tooltip("Number of thermal erosion iterations")]
-    [Range(0, 50)]
-    public int thermalIterations = 10;
+    [Tooltip("Erosion brush radius (creates smoother channels)")]
+    [Range(1, 5)]
+    public int erosionRadius = 2;
 
-    [Tooltip("Maximum stable slope angle (degrees)")]
-    [Range(30f, 80f)]
-    public float talusAngle = 45f;
-
-    [Tooltip("How much material moves down slopes")]
+    [Header("River Formation")]
+    [Tooltip("Probability of erosion spreading to neighbors (lower = narrower rivers)")]
     [Range(0.1f, 1f)]
-    public float thermalErosionRate = 0.5f;
+    public float spreadProbability = 0.7f;
 
-    [Header("Rain Settings")]
-    [Tooltip("Simulates rainfall across terrain")]
-    public bool simulateRainfall = true;
+    [Tooltip("Favor downward slopes when eroding")]
+    [Range(0f, 1f)]
+    public float slopeBias = 0.6f;
 
-    [Tooltip("Amount of rain per iteration")]
-    [Range(0f, 0.1f)]
-    public float rainfallAmount = 0.01f;
+    [Header("Runtime Control")]
+    [Tooltip("If true, erosion will run continuously in Play Mode")]
+    public bool autoErode = false;
 
-    public void ApplyHydraulicErosion()
+    [Tooltip("Seconds between erosion steps")]
+    [Range(0.01f, 2f)]
+    public float stepInterval = 0.5f;
+
+    [Tooltip("Maximum number of steps for auto erosion (0 = unlimited, prevents Unity freezing)")]
+    [Range(0, 1000)]
+    public int maxAutoSteps = 100;
+
+    [Header("Debug Visualization")]
+    public bool showUnderwaterCells = false;
+    public bool showErosionFront = false;
+
+    private TerrainData terrainData;
+    private float[,] heights;
+    private int resolution;
+    private Vector3 terrainPos;
+    private Vector3 terrainSize;
+    private System.Random random;
+
+    private float nextStepTime = 0f;
+    private int erosionSteps = 0;
+    private int autoErosionStepsCompleted = 0;
+
+    private HashSet<Vector2Int> underwaterCells;
+    private HashSet<Vector2Int> waterEdgeCells;
+    private float[][] erosionBrushWeights;
+
+    void Start()
     {
-#if UNITY_EDITOR
         if (terrain == null)
         {
-            Debug.LogError("Assign a Terrain first.");
+            Debug.LogError("TerrainErosion: Assign a Terrain first.");
+            enabled = false;
             return;
         }
 
-        TerrainData terrainData = terrain.terrainData;
-        int resolution = terrainData.heightmapResolution;
-        float[,] heights = terrainData.GetHeights(0, 0, resolution, resolution);
-
-        System.Random random = new System.Random();
-
-        // Simulate droplets
-        for (int i = 0; i < dropletCount; i++)
+        if (waterLevel == null)
         {
-            // Random starting position
-            float x = (float)random.NextDouble() * (resolution - 1);
-            float y = (float)random.NextDouble() * (resolution - 1);
+            Debug.LogError("TerrainErosion: Assign a WaterLevel script.");
+            enabled = false;
+            return;
+        }
 
-            float sediment = 0f;
-            float water = waterAmount;
-            float velocity = 1f;
+        terrainData = terrain.terrainData;
+        resolution = terrainData.heightmapResolution;
+        terrainPos = terrain.transform.position;
+        terrainSize = terrainData.size;
 
-            for (int step = 0; step < maxDropletLifetime; step++)
+        heights = terrainData.GetHeights(0, 0, resolution, resolution);
+        random = new System.Random();
+
+        InitializeErosionBrush();
+        FindUnderwaterCells();
+        FindWaterEdge();
+
+        Debug.Log($"Found {underwaterCells.Count} underwater cells, {waterEdgeCells.Count} edge cells");
+    }
+
+    void Update()
+    {
+#if UNITY_EDITOR
+        if (!Application.isPlaying) return;
+#endif
+        if (!autoErode) return;
+
+        // Check if we've hit the max steps limit
+        if (maxAutoSteps > 0 && autoErosionStepsCompleted >= maxAutoSteps)
+        {
+            autoErode = false;
+            Debug.Log($"Auto erosion stopped: reached max steps limit ({maxAutoSteps})");
+            return;
+        }
+
+        if (Time.time >= nextStepTime)
+        {
+            nextStepTime = Time.time + stepInterval;
+            ApplyUnderwaterErosionStep();
+            autoErosionStepsCompleted++;
+        }
+    }
+
+    public void ToggleErosion()
+    {
+        autoErode = !autoErode;
+        if (autoErode)
+        {
+            nextStepTime = Time.time;
+            autoErosionStepsCompleted = 0; // Reset counter when starting
+            Debug.Log($"TerrainErosion: Auto erosion started. Will run for {(maxAutoSteps > 0 ? maxAutoSteps.ToString() : "unlimited")} steps.");
+        }
+        else
+        {
+            Debug.Log($"TerrainErosion: Auto erosion stopped. Completed {autoErosionStepsCompleted} steps.");
+        }
+    }
+
+    public void ApplyUnderwaterErosionStep()
+    {
+        if (heights == null || terrainData == null)
+        {
+            Debug.LogError("Terrain data not initialized");
+            return;
+        }
+
+        // Refresh underwater detection
+        FindUnderwaterCells();
+        FindWaterEdge();
+
+        if (waterEdgeCells.Count == 0)
+        {
+            Debug.LogWarning("No water edge found - is terrain below water level?");
+            return;
+        }
+
+        // Erode from the water edge inward
+        ErodeFromWaterEdge();
+
+        // Optional smoothing
+        if (smoothingPasses > 0)
+        {
+            for (int i = 0; i < smoothingPasses; i++)
             {
-                int xi = (int)x;
-                int yi = (int)y;
-
-                // Get current height
-                float currentHeight = heights[yi, xi];
-
-                // Find steepest descent direction
-                float steepestSlope = 0f;
-                int bestX = xi;
-                int bestY = yi;
-
-                for (int dy = -1; dy <= 1; dy++)
-                {
-                    for (int dx = -1; dx <= 1; dx++)
-                    {
-                        if (dx == 0 && dy == 0) continue;
-
-                        int nx = xi + dx;
-                        int ny = yi + dy;
-
-                        if (nx < 0 || nx >= resolution || ny < 0 || ny >= resolution) continue;
-
-                        float neighborHeight = heights[ny, nx];
-                        float slope = currentHeight - neighborHeight;
-
-                        if (slope > steepestSlope)
-                        {
-                            steepestSlope = slope;
-                            bestX = nx;
-                            bestY = ny;
-                        }
-                    }
-                }
-
-                // If no downward slope, deposit and stop
-                if (steepestSlope < minSlope)
-                {
-                    heights[yi, xi] += sediment;
-                    break;
-                }
-
-                // Calculate sediment capacity based on slope and velocity
-                float capacity = Mathf.Max(steepestSlope, minSlope) * velocity * water * sedimentCapacity;
-
-                // Erosion or deposition
-                if (sediment > capacity)
-                {
-                    // Deposit excess sediment
-                    float deposit = (sediment - capacity) * depositionRate;
-                    heights[yi, xi] += deposit;
-                    sediment -= deposit;
-                }
-                else
-                {
-                    // Erode terrain
-                    float erode = Mathf.Min((capacity - sediment) * erosionRate, steepestSlope);
-                    heights[yi, xi] -= erode;
-                    sediment += erode;
-                }
-
-                // Move to next position
-                x = bestX;
-                y = bestY;
-
-                // Update velocity and evaporate water
-                velocity = Mathf.Sqrt(velocity * velocity + steepestSlope);
-                water *= (1f - evaporationRate);
-
-                // Stop if out of water
-                if (water < 0.01f) break;
+                SmoothUnderwater();
             }
         }
 
+        // Apply changes
         terrainData.SetHeights(0, 0, heights);
-        Debug.Log($"Hydraulic erosion applied - {dropletCount} droplets simulated");
-#endif
+        erosionSteps++;
+
+        Debug.Log($"Erosion step {erosionSteps} complete. Eroded near {waterEdgeCells.Count} edge cells. Auto steps: {autoErosionStepsCompleted}/{(maxAutoSteps > 0 ? maxAutoSteps.ToString() : "?")}");
     }
 
-    public void ApplyThermalErosion()
+    private void InitializeErosionBrush()
     {
-#if UNITY_EDITOR
-        if (terrain == null)
+        erosionBrushWeights = new float[erosionRadius * 2 + 1][];
+        for (int i = 0; i < erosionBrushWeights.Length; i++)
         {
-            Debug.LogError("Assign a Terrain first.");
-            return;
+            erosionBrushWeights[i] = new float[erosionRadius * 2 + 1];
         }
 
-        TerrainData terrainData = terrain.terrainData;
-        int resolution = terrainData.heightmapResolution;
-        float[,] heights = terrainData.GetHeights(0, 0, resolution, resolution);
-
-        float talusThreshold = Mathf.Tan(talusAngle * Mathf.Deg2Rad) * (1f / resolution);
-
-        for (int iteration = 0; iteration < thermalIterations; iteration++)
+        float weightSum = 0;
+        for (int dy = -erosionRadius; dy <= erosionRadius; dy++)
         {
-            float[,] newHeights = (float[,])heights.Clone();
-
-            for (int y = 1; y < resolution - 1; y++)
+            for (int dx = -erosionRadius; dx <= erosionRadius; dx++)
             {
-                for (int x = 1; x < resolution - 1; x++)
-                {
-                    float currentHeight = heights[y, x];
-                    float totalDiff = 0f;
-                    int neighbors = 0;
-
-                    // Check all 8 neighbors
-                    for (int dy = -1; dy <= 1; dy++)
-                    {
-                        for (int dx = -1; dx <= 1; dx++)
-                        {
-                            if (dx == 0 && dy == 0) continue;
-
-                            int nx = x + dx;
-                            int ny = y + dy;
-
-                            float neighborHeight = heights[ny, nx];
-                            float heightDiff = currentHeight - neighborHeight;
-
-                            // If slope is too steep, material slides down
-                            if (heightDiff > talusThreshold)
-                            {
-                                totalDiff += heightDiff - talusThreshold;
-                                neighbors++;
-                            }
-                        }
-                    }
-
-                    // Distribute material to lower neighbors
-                    if (neighbors > 0)
-                    {
-                        float transfer = (totalDiff / neighbors) * thermalErosionRate;
-                        newHeights[y, x] -= transfer * neighbors;
-
-                        // Add to neighbors
-                        for (int dy = -1; dy <= 1; dy++)
-                        {
-                            for (int dx = -1; dx <= 1; dx++)
-                            {
-                                if (dx == 0 && dy == 0) continue;
-
-                                int nx = x + dx;
-                                int ny = y + dy;
-
-                                float neighborHeight = heights[ny, nx];
-                                float heightDiff = currentHeight - neighborHeight;
-
-                                if (heightDiff > talusThreshold)
-                                {
-                                    newHeights[ny, nx] += transfer;
-                                }
-                            }
-                        }
-                    }
-                }
+                float distance = Mathf.Sqrt(dx * dx + dy * dy);
+                float weight = Mathf.Max(0, erosionRadius - distance);
+                erosionBrushWeights[dy + erosionRadius][dx + erosionRadius] = weight;
+                weightSum += weight;
             }
-
-            heights = newHeights;
         }
 
-        terrainData.SetHeights(0, 0, heights);
-        Debug.Log($"Thermal erosion applied - {thermalIterations} iterations");
-#endif
+        // Normalize
+        for (int dy = 0; dy < erosionBrushWeights.Length; dy++)
+        {
+            for (int dx = 0; dx < erosionBrushWeights[dy].Length; dx++)
+            {
+                erosionBrushWeights[dy][dx] /= weightSum;
+            }
+        }
     }
 
-    public void ApplyRainfall()
+    private void FindUnderwaterCells()
     {
-#if UNITY_EDITOR
-        if (terrain == null)
-        {
-            Debug.LogError("Assign a Terrain first.");
-            return;
-        }
+        underwaterCells = new HashSet<Vector2Int>();
+        float waterHeight = waterLevel.GetWaterHeight();
 
-        TerrainData terrainData = terrain.terrainData;
-        int resolution = terrainData.heightmapResolution;
-        float[,] heights = terrainData.GetHeights(0, 0, resolution, resolution);
-
-        // Simple rainfall simulation - just adds water/erosion to all points
         for (int y = 0; y < resolution; y++)
         {
             for (int x = 0; x < resolution; x++)
             {
-                // Simulate small amount of erosion from rain impact
-                float erosion = rainfallAmount * 0.1f;
-                heights[y, x] -= erosion;
+                Vector3 worldPos = GetWorldPosition(x, y);
+                if (worldPos.y < waterHeight)
+                {
+                    underwaterCells.Add(new Vector2Int(x, y));
+                }
+            }
+        }
+    }
+
+    private void FindWaterEdge()
+    {
+        waterEdgeCells = new HashSet<Vector2Int>();
+
+        foreach (var cell in underwaterCells)
+        {
+            // Check if any neighbor is above water
+            bool isEdge = false;
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    if (dx == 0 && dy == 0) continue;
+
+                    int nx = cell.x + dx;
+                    int ny = cell.y + dy;
+
+                    if (nx < 0 || nx >= resolution || ny < 0 || ny >= resolution)
+                        continue;
+
+                    if (!underwaterCells.Contains(new Vector2Int(nx, ny)))
+                    {
+                        isEdge = true;
+                        break;
+                    }
+                }
+                if (isEdge) break;
+            }
+
+            if (isEdge)
+            {
+                waterEdgeCells.Add(cell);
+            }
+        }
+    }
+
+    private void ErodeFromWaterEdge()
+    {
+        // Use flood-fill approach from water edge
+        Queue<Vector2Int> erosionQueue = new Queue<Vector2Int>();
+        HashSet<Vector2Int> processed = new HashSet<Vector2Int>();
+
+        // Start from all edge cells
+        foreach (var edge in waterEdgeCells)
+        {
+            erosionQueue.Enqueue(edge);
+            processed.Add(edge);
+        }
+
+        int currentDepth = 0;
+
+        // Process in waves from edge
+        while (erosionQueue.Count > 0 && currentDepth < erosionDepth)
+        {
+            int currentLevelCount = erosionQueue.Count;
+
+            for (int i = 0; i < currentLevelCount; i++)
+            {
+                Vector2Int cell = erosionQueue.Dequeue();
+
+                // Erode this cell
+                float erosionAmount = erosionStrength;
+
+                // Increase erosion for deeper areas if flowing toward deepest
+                if (flowTowardDeepest)
+                {
+                    float depth = GetDepthBelowWater(cell.x, cell.y);
+                    erosionAmount *= (1f + depth * 2f);
+                }
+
+                ErodeCell(cell.x, cell.y, erosionAmount);
+
+                // Spread to neighbors
+                List<Vector2Int> neighbors = GetUnderwaterNeighbors(cell);
+
+                // Sort by depth if flowing toward deepest
+                if (flowTowardDeepest)
+                {
+                    neighbors.Sort((a, b) =>
+                        GetDepthBelowWater(b.x, b.y).CompareTo(GetDepthBelowWater(a.x, a.y))
+                    );
+                }
+
+                foreach (var neighbor in neighbors)
+                {
+                    if (processed.Contains(neighbor))
+                        continue;
+
+                    // Probability check for natural variation
+                    if (random.NextDouble() > spreadProbability)
+                        continue;
+
+                    // Slope bias - prefer downward slopes
+                    if (slopeBias > 0)
+                    {
+                        float currentHeight = heights[cell.y, cell.x];
+                        float neighborHeight = heights[neighbor.y, neighbor.x];
+
+                        if (neighborHeight > currentHeight)
+                        {
+                            // Going uphill - reduce probability
+                            if (random.NextDouble() > (1f - slopeBias))
+                                continue;
+                        }
+                    }
+
+                    erosionQueue.Enqueue(neighbor);
+                    processed.Add(neighbor);
+                }
+            }
+
+            currentDepth++;
+        }
+    }
+
+    private List<Vector2Int> GetUnderwaterNeighbors(Vector2Int cell)
+    {
+        List<Vector2Int> neighbors = new List<Vector2Int>();
+
+        for (int dy = -1; dy <= 1; dy++)
+        {
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0) continue;
+
+                int nx = cell.x + dx;
+                int ny = cell.y + dy;
+
+                if (nx < 0 || nx >= resolution || ny < 0 || ny >= resolution)
+                    continue;
+
+                Vector2Int neighbor = new Vector2Int(nx, ny);
+                if (underwaterCells.Contains(neighbor))
+                {
+                    neighbors.Add(neighbor);
+                }
             }
         }
 
-        terrainData.SetHeights(0, 0, heights);
-        Debug.Log("Rainfall applied");
-#endif
+        return neighbors;
     }
 
-    public void ApplyCombinedErosion()
+    private float GetDepthBelowWater(int x, int y)
     {
-#if UNITY_EDITOR
-        // Apply in realistic order
-        if (simulateRainfall)
+        Vector3 worldPos = GetWorldPosition(x, y);
+        float waterHeight = waterLevel.GetWaterHeight();
+        return (waterHeight - worldPos.y) / terrainSize.y;
+    }
+
+    private void ErodeCell(int x, int y, float amount)
+    {
+        // Check if slope is too steep to erode (prevents cutting down mountains)
+        float currentHeight = heights[y, x];
+        float maxNeighborHeight = currentHeight;
+
+        for (int dy = -1; dy <= 1; dy++)
         {
-            ApplyRainfall();
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                if (dx == 0 && dy == 0) continue;
+
+                int nx = x + dx;
+                int ny = y + dy;
+
+                if (nx >= 0 && nx < resolution && ny >= 0 && ny < resolution)
+                {
+                    maxNeighborHeight = Mathf.Max(maxNeighborHeight, heights[ny, nx]);
+                }
+            }
         }
 
-        ApplyHydraulicErosion();
-        ApplyThermalErosion();
+        float slope = maxNeighborHeight - currentHeight;
 
-        Debug.Log("Combined erosion complete!");
-#endif
+        // Don't erode if slope is too steep
+        if (slope > maxErodableSlope)
+        {
+            return;
+        }
+
+        // Erode with brush
+        for (int dy = -erosionRadius; dy <= erosionRadius; dy++)
+        {
+            for (int dx = -erosionRadius; dx <= erosionRadius; dx++)
+            {
+                int nx = x + dx;
+                int ny = y + dy;
+
+                if (nx >= 0 && nx < resolution && ny >= 0 && ny < resolution)
+                {
+                    float weight = erosionBrushWeights[dy + erosionRadius][dx + erosionRadius];
+                    heights[ny, nx] = Mathf.Max(0, heights[ny, nx] - amount * weight);
+                }
+            }
+        }
     }
+
+    private void SmoothUnderwater()
+    {
+        float[,] temp = new float[resolution, resolution];
+        System.Array.Copy(heights, temp, heights.Length);
+
+        foreach (var cell in underwaterCells)
+        {
+            float sum = 0f;
+            int count = 0;
+
+            for (int dy = -1; dy <= 1; dy++)
+            {
+                for (int dx = -1; dx <= 1; dx++)
+                {
+                    int nx = cell.x + dx;
+                    int ny = cell.y + dy;
+
+                    if (nx >= 0 && nx < resolution && ny >= 0 && ny < resolution)
+                    {
+                        sum += temp[ny, nx];
+                        count++;
+                    }
+                }
+            }
+
+            heights[cell.y, cell.x] = sum / count;
+        }
+    }
+
+    private Vector3 GetWorldPosition(int x, int y)
+    {
+        float height01 = heights[y, x];
+        return new Vector3(
+            terrainPos.x + (x / (float)(resolution - 1)) * terrainSize.x,
+            terrainPos.y + height01 * terrainSize.y,
+            terrainPos.z + (y / (float)(resolution - 1)) * terrainSize.z
+        );
+    }
+
+#if UNITY_EDITOR
+    void OnDrawGizmosSelected()
+    {
+        if (!showUnderwaterCells && !showErosionFront) return;
+        if (terrain == null || underwaterCells == null) return;
+
+        // Draw underwater cells
+        if (showUnderwaterCells && underwaterCells != null)
+        {
+            Gizmos.color = new Color(0.2f, 0.5f, 0.8f, 0.3f);
+            foreach (var cell in underwaterCells)
+            {
+                Vector3 pos = GetWorldPosition(cell.x, cell.y);
+                Gizmos.DrawCube(pos, Vector3.one * 0.5f);
+            }
+        }
+
+        // Draw water edge
+        if (showErosionFront && waterEdgeCells != null)
+        {
+            Gizmos.color = Color.red;
+            foreach (var cell in waterEdgeCells)
+            {
+                Vector3 pos = GetWorldPosition(cell.x, cell.y);
+                Gizmos.DrawWireCube(pos, Vector3.one);
+            }
+        }
+    }
+#endif
 }
