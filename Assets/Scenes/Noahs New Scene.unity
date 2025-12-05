@@ -199,7 +199,7 @@ MonoBehaviour:
   cell_base_prefab: {fileID: 6684773183544980042, guid: 118bd48e3513bf24db1cef4372fa6656, type: 3}
   pixel_prefab: {fileID: 1771163789604626379, guid: 47d773fd765edb64f9502f980864e55b, type: 3}
   pattern_size: 3
-  cell_grid_size: 20
+  cell_grid_size: 50
 --- !u!136 &178451022
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -450,7 +450,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 754826695}
   m_LocalRotation: {x: 0.6405753, y: -0, z: -0, w: 0.7678954}
-  m_LocalPosition: {x: 7.55, y: 20.93, z: 5.84}
+  m_LocalPosition: {x: 35.8, y: 73.3, z: 15.3}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []

@@ -110,11 +110,25 @@ public class WaveFunctionCollapse : MonoBehaviour
             return position_to_cell[position];
         }
 
+        public void PartialResetCell(Dictionary<int, Tile> _hash_to_tile)
+        {
+            collapsed = false;
+            collapsed_tile = null;
+            UpdateCell(new Color(0.236f, 0.191f, 0.191f, 1.000f));
+
+            // Define All Possible Options
+            collapse_options = new List<Tile>();
+            foreach (KeyValuePair<int, Tile> pair in _hash_to_tile)
+            {
+                collapse_options.Add(pair.Value);
+            }
+
+        }
         public int x, y, cell_index;
         public bool collapsed;
         public Tile? collapsed_tile;
         public List<Tile> collapse_options;
-        GameObject pixel;
+        public GameObject pixel;
     }
 
     Vector2Int grid_start = new Vector2Int(0, 0);
@@ -140,11 +154,14 @@ public class WaveFunctionCollapse : MonoBehaviour
     private Dictionary<Vector2Int, Cell> position_to_cell = new Dictionary<Vector2Int, Cell>();
     private Dictionary<int, Cell> index_to_cell = new Dictionary<int, Cell>();
 
-
+    private String[] wfc_files = {"3Bricks.png", "Cat.png", "Cats.png" , "Cave.png", "Chess.png", "Circle.png", "City.png",
+    "ColoredCity.png", "Disk.png", "Dungeon.png", "Fabric.png", "Flowers.png", "Forest.png", "Hogs.png"};
+    private int wfc_index = 0;
+    private int wfc_retry_count = 0;
     // Start is called before the first frame update
     void Start()
     {
-        LoadWFCConditions(pattern_size, "3bricks.png");
+        LoadWFCConditions(pattern_size, "3Bricks.png");
     }
 
     // Update is called once per frame
@@ -275,7 +292,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         int tile_index = UnityEngine.Random.Range(0, next_tile_index);
 
         // Calculate Center Index
-        int center_index = pattern_size + 1;
+        int center_index = (pattern_size * pattern_size) / 2;
 
         // Get Tiles Center Color 
         Color tile_center_color = index_to_tile[tile_index].tile_pixels[center_index];
@@ -293,11 +310,9 @@ public class WaveFunctionCollapse : MonoBehaviour
 
     private void StepWFC()
     {
-        Stopwatch timer = Stopwatch.StartNew();
-
         int cell_index = -1;
         int lowest_entropy = 9999;
-
+        int collapse_count = 0;
         // Sort Through To Find Lowest
         foreach(Cell cell in cells)
         {
@@ -315,12 +330,33 @@ public class WaveFunctionCollapse : MonoBehaviour
                     lowest_entropy = cell.collapse_options.Count;
                     cell_index = cell.cell_index;
                 }
+            } else
+            {
+                collapse_count++;
             }
         }
 
         if (cell_index == -1)
         {
             UnityEngine.Debug.Log("No valid cell left to collapse.");
+            if(collapse_count >= cells.Count)
+            {
+                wfc_retry_count = 0;
+                StartNextWFC();
+            }
+            else
+            {
+                if(wfc_retry_count >= 3)
+                {
+                    wfc_retry_count = 0;
+                    StartNextWFC();
+                }
+                else
+                {
+                    wfc_retry_count++;
+                    RestartWFC();
+                }
+            }
             return;
         }
 
@@ -338,7 +374,8 @@ public class WaveFunctionCollapse : MonoBehaviour
         selected_cell.collapsed_tile = tile_to_collapse_cell_to;
 
         // Update Tile Color
-        int center_index = pattern_size + 1;        Color tile_center_color = selected_cell.collapsed_tile.tile_pixels[center_index];
+        int center_index = (pattern_size * pattern_size) / 2;
+        Color tile_center_color = selected_cell.collapsed_tile.tile_pixels[center_index];
         selected_cell.UpdateCell(tile_center_color);
 
         // Wipe Options & Collapse Tile
@@ -347,46 +384,87 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         ReduceEntropy(selected_cell);
 
-        timer.Stop();
-        //UnityEngine.Debug.Log($"StepWFC took {timer.ElapsedMilliseconds} ms");
-
-        Invoke(nameof(StepWFC), 0.05f);
+        Invoke(nameof(StepWFC), 0.0001f);
     }
 
-    private void ReduceEntropy(Cell _cell)
+    private void ReduceEntropy(Cell startCell)
     {
-        foreach(DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
+        Queue<Cell> toProcess = new Queue<Cell>();
+        HashSet<int> inQueue = new HashSet<int>();
+
+        toProcess.Enqueue(startCell);
+        inQueue.Add(startCell.cell_index);
+
+        while (toProcess.Count > 0)
         {
-            // Calculate Neighbor Position
-            Vector2Int neighborPos = new Vector2Int(_cell.x, _cell.y);
-            switch (direction)
+            Cell current = toProcess.Dequeue();
+            inQueue.Remove(current.cell_index);
+
+            foreach (DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
             {
-                case DIRECTIONS.UP: neighborPos.y -= 1; break;
-                case DIRECTIONS.DOWN: neighborPos.y += 1; break;
-                case DIRECTIONS.LEFT: neighborPos.x -= 1; break;
-                case DIRECTIONS.RIGHT: neighborPos.x += 1; break;
+                // Calculate Neighbor Position
+                Vector2Int neighborPos = new Vector2Int(current.x, current.y);
+                switch (direction)
+                {
+                    case DIRECTIONS.UP: neighborPos.y -= 1; break;
+                    case DIRECTIONS.DOWN: neighborPos.y += 1; break;
+                    case DIRECTIONS.LEFT: neighborPos.x -= 1; break;
+                    case DIRECTIONS.RIGHT: neighborPos.x += 1; break;
+                }
+
+                // Skip if neighbor is out of bounds
+                if (!position_to_cell.ContainsKey(neighborPos))
+                {
+                    continue;
+                }
+
+                Cell neighbor = position_to_cell[neighborPos];
+
+                // Skip if already collapsed
+                if (neighbor.collapsed)
+                {
+                    continue;
+                }
+
+                // Build set of valid tiles for this neighbor based on current cell's possibilities
+                HashSet<Tile> validTiles = new HashSet<Tile>();
+
+                if (current.collapsed)
+                {
+                    // Current cell is collapsed - use its tile's adjacencies
+                    foreach (Tile adj in current.collapsed_tile.adjacencies[(int)direction])
+                    {
+                        validTiles.Add(adj);
+                    }
+                }
+                else
+                {
+                    // Current cell not collapsed - union of all possible adjacencies
+                    foreach (Tile option in current.collapse_options)
+                    {
+                        foreach (Tile adj in option.adjacencies[(int)direction])
+                        {
+                            validTiles.Add(adj);
+                        }
+                    }
+                }
+
+                // Track count before removal
+                int previousCount = neighbor.collapse_options.Count;
+
+                // Remove invalid options
+                neighbor.collapse_options.RemoveAll(tile => !validTiles.Contains(tile));
+
+                // If options were reduced, add neighbor to queue (if not already there)
+                if (neighbor.collapse_options.Count < previousCount)
+                {
+                    if (!inQueue.Contains(neighbor.cell_index))
+                    {
+                        toProcess.Enqueue(neighbor);
+                        inQueue.Add(neighbor.cell_index);
+                    }
+                }
             }
-
-            // Skip This Iteration If Neighbor Is Out Of Bounds
-            if (!position_to_cell.ContainsKey(neighborPos))
-            {
-                continue;
-            }
-
-            // Get Neighbor In Direction, Skip If Already Collapsed
-            Cell direction_neighbor = _cell.FetchNeighbor(position_to_cell, direction);
-            if(direction_neighbor.collapsed == true)
-            {
-                continue;
-            }
-
-            // Get Possibilites
-            List<Tile> collapsed_neighbor_possibilites = _cell.collapsed_tile.adjacencies[(int)direction];
-
-            // Remove All Possibilities Which Don't Exist Due To New Data
-            direction_neighbor.collapse_options.RemoveAll(
-                collapse_possibility => !collapsed_neighbor_possibilites.Contains(collapse_possibility)
-            );
         }
     }
 
@@ -465,6 +543,71 @@ public class WaveFunctionCollapse : MonoBehaviour
             if (right_valid) tile.addAdjacency(DIRECTIONS.RIGHT, other);
         }
     }
+    
+    private void RestartWFC()
+    {
+        // Cancel Invoke Incase Its Running
+        CancelInvoke(nameof(StepWFC));
+
+        foreach (Cell cell in cells)
+        {
+            cell.PartialResetCell(hash_to_tile);
+        }
+
+        // Pick A Random Cell
+        int random_cell_index = UnityEngine.Random.Range(0, cells.Count);
+
+        // Pick A Random Tile
+        int tile_index = UnityEngine.Random.Range(0, index_to_tile.Count);
+
+        // Calculate Center Index
+        int center_index = (pattern_size * pattern_size) / 2;
+
+        // Get Tiles Center Color 
+        Color tile_center_color = index_to_tile[tile_index].tile_pixels[center_index];
+
+        // Populate Cell & Reduce Entropy
+        cells[random_cell_index].UpdateCell(tile_center_color);
+        cells[random_cell_index].collapsed = true;
+        cells[random_cell_index].collapsed_tile = index_to_tile[tile_index];
+        ReduceEntropy(cells[random_cell_index]);
+        StepWFC();
+    }
+
+    private void StartNextWFC()
+    {
+        // Cancel Invoke If It's Trying To Run
+        CancelInvoke(nameof(StepWFC));
+
+        // Destroy all cell GameObjects first
+        foreach (Cell cell in cells)
+        {
+            if (cell.pixel != null)
+            {
+                Destroy(cell.pixel);
+            }
+        }
+
+        // Now clear the lists
+        cells.Clear();
+        position_to_cell.Clear();
+        index_to_cell.Clear();
+
+        // Reset Tile Stuffs
+        active_tiles.Clear();
+        hash_to_tile.Clear();
+        index_to_tile.Clear();
+
+        wfc_index++;
+        if (wfc_index >= wfc_files.Length)
+        {
+            UnityEngine.Debug.Log("Finished all WFC files!");
+            return;
+        }
+
+        LoadWFCConditions(pattern_size, wfc_files[wfc_index]);
+    }
+
     private List<int> CompareTiles(Tile tile_a, Tile tile_b)
     {
         List<int> similarities = new List<int>();
