@@ -19,12 +19,14 @@ public class Flocking : MonoBehaviour
 {
 
     private List<boid> boids = new List<boid>();
+    private boid eagle;
     private float maxForce = 10;
     private float maxSpeed = 10;
 
 
     [SerializeField] private int numBoids = 50;
     [SerializeField] private GameObject boidPrefab;
+    [SerializeField] private GameObject eaglePrefab;
     
     //Where the boids can be
     public Vector3 areaOfEffect;
@@ -32,6 +34,8 @@ public class Flocking : MonoBehaviour
     public float separationRadius = 1;
     public float alignmentRadius = 1;
     public float k = 1;
+    public float bondingBoxSmoothing = 0.1f;
+    public float eagleRadius = 5;
     
     BoundingBox boundingBox;
 
@@ -60,11 +64,11 @@ public class Flocking : MonoBehaviour
                 || boids[i].gameAgent.transform.position.z > boundingBox.max.z
                 || boids[i].gameAgent.transform.position.z < boundingBox.min.z)
             {
+                //reverse direction, and smooth out the bounce
                 boids[i].velocity = -boids[i].velocity;
             }
             
             Vector3 force = Seperation(i) + Alignment(i) + Cohesion(i);
-            //Vector3 force = Alignment(i);
             
             boids[i].velocity += force * Time.deltaTime;
         
@@ -112,6 +116,38 @@ public class Flocking : MonoBehaviour
             newBoid.velocity = randomVelocity;
             boids.Add(newBoid);
         }
+        
+        //Create the eagle
+        GameObject eagleInstance = Instantiate(eaglePrefab);
+        eagle = new boid();
+        eagle.gameAgent = eagleInstance;
+        eagle.velocity = Vector3.zero;
+        boids.Add(eagle);
+        eagleInstance.transform.position = new Vector3(0, 10, 0);
+        
+    }
+
+    //Makes the eagle chase the nearest boid
+    Vector3 ChaseBoids(int boidIndex)
+    {
+        List<boid> neighbors = new List<boid>();
+
+        //loop through all boids and find the nearest one
+        for (int i = 0; i < boids.Count; i++)
+        {
+            double distance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, boids[i].gameAgent.transform.position);
+            if (distance < eagleRadius)
+            {
+                neighbors.Add(boids[i]);
+            }
+        }
+        
+        return Vector3.zero;
+    }
+
+    Vector3 SeperateFromWall(int boidIndex)
+    {
+        return Vector3.zero;
     }
     
 
