@@ -1,18 +1,6 @@
+using System.Collections.Generic;
 using Unity.Mathematics;
 using UnityEngine;
-
-public class NewBehaviourScript : MonoBehaviour
-{
-    void Start()
-    {
-
-    }
-
-    void Update()
-    {
-
-    }
-}
 
 public enum ColliderType
 {
@@ -31,7 +19,7 @@ public class Collider
 
     public Collider(ColliderType t)
     {
-        type = t;  // Fixed: was assigning type to type instead of t to type
+        type = t;
         pBody = null;
         overlapCount = 0;
         offset = float4x4.identity;
@@ -259,13 +247,10 @@ public static class ContactResolver
 {
     public static void ResolveContacts(Contact[] contacts, int contactCount, float restitution = 0.8f)
     {
-        // First resolve interpenetration for all contacts
         for (int i = 0; i < contactCount; i++)
         {
             ResolveInterpenetration(ref contacts[i]);
         }
-
-        // Then resolve velocity for all contacts
         for (int i = 0; i < contactCount; i++)
         {
             ResolveVelocity(ref contacts[i], restitution);
@@ -283,7 +268,6 @@ public static class ContactResolver
         float totalInv = invA + invB;
         if (totalInv <= 0) return;
 
-        // Slop and beta for Baumgarte stabilization
         const float slop = 0.01f;
         const float beta = 0.4f;
         d = math.max(0.0f, d - slop) * beta;
@@ -291,7 +275,6 @@ public static class ContactResolver
 
         float3 movePerInv = c.normal * (d / totalInv);
 
-        // Handle case where body[1] is null (static object like plane)
         if (c.body[1] == null)
         {
             if (invA > 0)
@@ -302,7 +285,6 @@ public static class ContactResolver
             return;
         }
 
-        // Handle case where body[0] is null
         if (c.body[0] == null)
         {
             if (invB > 0)
@@ -313,7 +295,6 @@ public static class ContactResolver
             return;
         }
 
-        // Both bodies exist
         if (invA > 0)
         {
             c.body[0].position -= (Vector3)(movePerInv * invA);
@@ -338,9 +319,8 @@ public static class ContactResolver
         float3 relV = vA - vB;
 
         float sepVel = math.dot(relV, contact.normal);
-        if (sepVel > 0) return; // Already separating
+        if (sepVel > 0) return;
 
-        // Restitution threshold - don't bounce slow collisions
         const float restThreshold = 1.0f;
         float e = math.abs(sepVel) < restThreshold ? 0.0f : restitution;
 
@@ -459,5 +439,165 @@ public static class CollisionTests
         c.body = new RigidBody[2] { a.GetBody(), b.GetBody() };
 
         data.AddContacts(1);
+    }
+}
+
+public static class MeshCollisionDetection
+{
+    public static int SphereMesh(SphereCollider sphere, MeshCollider mesh, CollisionData data)
+    {
+        if (data.contactsLeft <= 0) return 0;
+
+        sphere.UpdateInternals();
+        mesh.UpdateInternals();
+
+        float3 spherePos = new float3(
+            sphere.GetTransform().c3.x,
+            sphere.GetTransform().c3.y,
+            sphere.GetTransform().c3.z
+        );
+
+        List<int> potentialTriangles = new List<int>();
+        mesh.GetPotentialCollisionTriangles(spherePos, sphere.radius, potentialTriangles);
+
+        int contactsGenerated = 0;
+        float deepestPenetration = 0;
+        Contact deepestContact = new Contact();
+        bool foundContact = false;
+
+        foreach (int triIndex in potentialTriangles)
+        {
+            mesh.GetTriangle(triIndex, out float3 v0, out float3 v1, out float3 v2);
+
+            float3 closestPoint = ClosestPointOnTriangle(spherePos, v0, v1, v2);
+
+            float3 delta = spherePos - closestPoint;
+            float distanceSquared = math.lengthsq(delta);
+
+            if (distanceSquared < sphere.radius * sphere.radius)
+            {
+                float distance = math.sqrt(distanceSquared);
+                float penetration = sphere.radius - distance;
+
+                if (penetration > deepestPenetration)
+                {
+                    deepestPenetration = penetration;
+
+                    float3 normal;
+                    if (distance > 1e-6f)
+                    {
+                        normal = delta / distance;
+                    }
+                    else
+                    {
+                        normal = math.normalize(math.cross(v1 - v0, v2 - v0));
+                        if (math.dot(normal, spherePos - v0) < 0)
+                        {
+                            normal = -normal;
+                        }
+                    }
+
+                    deepestContact = new Contact
+                    {
+                        point = closestPoint,
+                        normal = normal,
+                        penetration = penetration,
+                        body = new RigidBody[2] { sphere.GetBody(), mesh.GetBody() }
+                    };
+
+                    foundContact = true;
+                }
+            }
+        }
+
+        if (foundContact && data.contactsLeft > 0)
+        {
+            data.GetCurrentContact() = deepestContact;
+            data.AddContacts(1);
+            contactsGenerated = 1;
+        }
+
+        return contactsGenerated;
+    }
+
+    private static float3 ClosestPointOnTriangle(float3 point, float3 a, float3 b, float3 c)
+    {
+        float3 ab = b - a;
+        float3 ac = c - a;
+        float3 ap = point - a;
+        float d1 = math.dot(ab, ap);
+        float d2 = math.dot(ac, ap);
+        if (d1 <= 0.0f && d2 <= 0.0f)
+            return a;
+
+        float3 bp = point - b;
+        float d3 = math.dot(ab, bp);
+        float d4 = math.dot(ac, bp);
+        if (d3 >= 0.0f && d4 <= d3)
+            return b;
+
+        float vc = d1 * d4 - d3 * d2;
+        if (vc <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+        {
+            float vAB = d1 / (d1 - d3);
+            return a + vAB * ab;
+        }
+
+        float3 cp = point - c;
+        float d5 = math.dot(ab, cp);
+        float d6 = math.dot(ac, cp);
+        if (d6 >= 0.0f && d5 <= d6)
+            return c;
+
+        float vb = d5 * d2 - d1 * d6;
+        if (vb <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+        {
+            float wAC = d2 / (d2 - d6);
+            return a + wAC * ac;
+        }
+
+        float va = d3 * d6 - d5 * d4;
+        if (va <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+        {
+            float wBC = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+            return b + wBC * (c - b);
+        }
+
+        float denom = 1.0f / (va + vb + vc);
+        float vFinal = vb * denom;
+        float wFinal = vc * denom;
+        return a + ab * vFinal + ac * wFinal;
+    }
+
+    public static bool TestSphereMesh(SphereCollider sphere, MeshCollider mesh)
+    {
+        sphere.UpdateInternals();
+        mesh.UpdateInternals();
+
+        float3 spherePos = new float3(
+            sphere.GetTransform().c3.x,
+            sphere.GetTransform().c3.y,
+            sphere.GetTransform().c3.z
+        );
+
+        List<int> potentialTriangles = new List<int>();
+        mesh.GetPotentialCollisionTriangles(spherePos, sphere.radius, potentialTriangles);
+
+        foreach (int triIndex in potentialTriangles)
+        {
+            mesh.GetTriangle(triIndex, out float3 v0, out float3 v1, out float3 v2);
+
+            float3 closestPoint = ClosestPointOnTriangle(spherePos, v0, v1, v2);
+
+            float3 delta = spherePos - closestPoint;
+            float distanceSquared = math.lengthsq(delta);
+
+            if (distanceSquared < sphere.radius * sphere.radius)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
