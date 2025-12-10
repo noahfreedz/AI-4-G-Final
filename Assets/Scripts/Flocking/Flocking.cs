@@ -4,10 +4,17 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = System.Random;
 
-class boid{
+class Boid{
     public GameObject gameAgent;
     public Vector3 velocity;
 };
+
+class Preditor
+{
+    public GameObject gameAgent;
+    public Vector3 velocity;
+    public int targetIndex;
+}
 
 struct BoundingBox{
     public Vector3 min;
@@ -18,8 +25,8 @@ struct BoundingBox{
 public class Flocking : MonoBehaviour
 {
 
-    private List<boid> boids = new List<boid>();
-    private boid eagle;
+    private List<Boid> boids = new List<Boid>();
+    private Preditor eagle;
     private float maxForce = 10;
     private float maxSpeed = 10;
 
@@ -72,14 +79,50 @@ public class Flocking : MonoBehaviour
             
             boids[i].velocity += force * Time.deltaTime;
         
-            // Limit speed
+            //Limit speed
             if (boids[i].velocity.magnitude > maxSpeed)
             {
                 boids[i].velocity = boids[i].velocity.normalized * maxSpeed;
             }
         
-            // Update GameObject position
+            //Update GameObject position
             boids[i].gameAgent.transform.position += boids[i].velocity * Time.deltaTime;
+            
+            //make the boids rotate in the direction they are moving in
+            if (boids[i].velocity.magnitude > 0.01f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(boids[i].velocity);
+                boids[i].gameAgent.transform.rotation = targetRotation * Quaternion.Euler(0, 90, 0);
+
+            }
+        }
+        
+        Vector3 eagleForce = ChaseBoids();
+        eagle.velocity += eagleForce * Time.deltaTime;
+    
+        //Limit eagle speed
+        if (eagle.velocity.magnitude > maxSpeed)
+        {
+            eagle.velocity = eagle.velocity.normalized * maxSpeed;
+        }
+    
+        //Check eagle bounds
+        if (eagle.gameAgent.transform.position.x > boundingBox.max.x
+            || eagle.gameAgent.transform.position.x < boundingBox.min.x
+            || eagle.gameAgent.transform.position.z > boundingBox.max.z
+            || eagle.gameAgent.transform.position.z < boundingBox.min.z)
+        {
+            eagle.velocity = -eagle.velocity;
+        }
+    
+        eagle.gameAgent.transform.position += eagle.velocity * Time.deltaTime;
+        
+        //Rotate the eagle to the direction its moving in
+        if (eagle.velocity.magnitude > 0.01f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(eagle.velocity);
+            eagle.gameAgent.transform.rotation = targetRotation * Quaternion.Euler(0, 90, 0);
+
         }
     }
 
@@ -90,7 +133,7 @@ public class Flocking : MonoBehaviour
             print("Creating boid");
     
             GameObject boidInstance = Instantiate(boidPrefab);
-            boid newBoid = new boid();
+            Boid newBoid = new Boid();
         
             float minX = -10f;
             float maxX = 10f;
@@ -119,30 +162,52 @@ public class Flocking : MonoBehaviour
         
         //Create the eagle
         GameObject eagleInstance = Instantiate(eaglePrefab);
-        eagle = new boid();
+        eagle = new Preditor();
         eagle.gameAgent = eagleInstance;
-        eagle.velocity = Vector3.zero;
-        boids.Add(eagle);
+        Vector3 randomEagleVelocity = new Vector3(
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(-1f, 1f),
+            UnityEngine.Random.Range(-1f, 1f)).normalized * UnityEngine.Random.Range(maxSpeed * 0.3f, maxSpeed * 0.7f);
+        eagle.velocity = randomEagleVelocity;
         eagleInstance.transform.position = new Vector3(0, 10, 0);
         
     }
 
     //Makes the eagle chase the nearest boid
-    Vector3 ChaseBoids(int boidIndex)
+    Vector3 ChaseBoids()
     {
-        List<boid> neighbors = new List<boid>();
-
-        //loop through all boids and find the nearest one
+        //Find the closest boid
+        float closestDistance = float.MaxValue;
+        int closestIndex = -1;
+    
         for (int i = 0; i < boids.Count; i++)
         {
-            double distance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, boids[i].gameAgent.transform.position);
-            if (distance < eagleRadius)
+            float distance = Vector3.Distance(eagle.gameAgent.transform.position, boids[i].gameAgent.transform.position);
+            if (distance < closestDistance)
             {
-                neighbors.Add(boids[i]);
+                closestDistance = distance;
+                closestIndex = i;
             }
         }
-        
-        return Vector3.zero;
+    
+        //If no boids found return zero
+        if (closestIndex == -1)
+        {
+            return Vector3.zero;
+        }
+    
+        //Calculate steering force toward the target
+        Vector3 desiredDirection = (boids[closestIndex].gameAgent.transform.position - eagle.gameAgent.transform.position).normalized;
+        Vector3 desiredVelocity = desiredDirection * maxSpeed;
+        Vector3 steeringForce = desiredVelocity - eagle.velocity;
+    
+        //Limit the steering force
+        if (steeringForce.magnitude > maxForce)
+        {
+            steeringForce = steeringForce.normalized * maxForce;
+        }
+    
+        return steeringForce;        
     }
 
     Vector3 SeperateFromWall(int boidIndex)
@@ -153,7 +218,7 @@ public class Flocking : MonoBehaviour
 
     Vector3 Seperation(int boidIndex)
     {
-        List<boid> neighbors  = new List<boid>();
+        List<Boid> neighbors  = new List<Boid>();
         
 
         for (int i = 0; i < boids.Count; i++)
@@ -172,16 +237,26 @@ public class Flocking : MonoBehaviour
             return Vector3.zero;
         }
         
-        
         Vector3 totalRepulsionForce = Vector3.zero;
 
-        foreach (boid b in neighbors)
+        foreach (Boid b in neighbors)
         {
             float distance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, b.gameAgent.transform.position);
             
             Vector3 direction = (boids[boidIndex].gameAgent.transform.position - b.gameAgent.transform.position).normalized;
             float magnitude = k / distance;
             
+            totalRepulsionForce += direction * magnitude;
+        }
+        
+        // Separate from eagle
+        float eagleDistance = Vector3.Distance(boids[boidIndex].gameAgent.transform.position, eagle.gameAgent.transform.position);
+        if (eagleDistance < eagleRadius)
+        {
+            Vector3 direction = (boids[boidIndex].gameAgent.transform.position - eagle.gameAgent.transform.position).normalized;
+            // Stronger repulsion from predator - multiply by 2 or 3
+            float magnitude = (k * 3f) / eagleDistance;
+        
             totalRepulsionForce += direction * magnitude;
         }
 
@@ -195,7 +270,7 @@ public class Flocking : MonoBehaviour
 
     Vector3 Alignment(int boidIndex)
     {
-        List<boid> neighbors = new List<boid>();
+        List<Boid> neighbors = new List<Boid>();
         Vector3 velocitySum = Vector3.zero;
         Vector3 desiredVelocity = Vector3.zero;
 
@@ -216,7 +291,7 @@ public class Flocking : MonoBehaviour
             return Vector3.zero;
         }
 
-        foreach (boid b in neighbors)
+        foreach (Boid b in neighbors)
         {
             velocitySum += b.velocity;
         }
@@ -229,7 +304,7 @@ public class Flocking : MonoBehaviour
     
     Vector3 Cohesion(int boidIndex)
     {
-        List<boid> neighbors  = new List<boid>();
+        List<Boid> neighbors  = new List<Boid>();
         Vector3 centerMass = Vector3.zero;
         
         for (int i = 0; i < boids.Count; i++)
@@ -250,7 +325,7 @@ public class Flocking : MonoBehaviour
         }
         
         //average position
-        foreach (boid b in neighbors)
+        foreach (Boid b in neighbors)
         {
             centerMass += b.gameAgent.transform.position;
         }

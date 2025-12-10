@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.4465781, g: 0.49641192, b: 0.574816, a: 1}
+  m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -331,14 +331,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   numBoids: 50
-  boidPrefab: {fileID: 4056078868076855683, guid: f2db16c1c4ab3e945b3397b35bd324dd, type: 3}
+  boidPrefab: {fileID: 4588415584897003637, guid: f2db16c1c4ab3e945b3397b35bd324dd, type: 3}
   eaglePrefab: {fileID: 4056078868076855683, guid: 525e1177df8314749b48c5a39cfa84c1, type: 3}
-  areaOfEffect: {x: 30, y: 30, z: 30}
+  areaOfEffect: {x: 30, y: 20, z: 30}
   cohesionRadius: 10
   separationRadius: 10
-  alignmentRadius: 10
+  alignmentRadius: 5
   k: 1
   bondingBoxSmoothing: 0.1
+  eagleRadius: 10
 --- !u!4 &1960192120
 Transform:
   m_ObjectHideFlags: 0
