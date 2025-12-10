@@ -169,7 +169,7 @@ MonoBehaviour:
   waterSettings: {fileID: 0}
   enableTerrainCollision: 1
   restitution: 0.5
-  gravity: -9.81
+  gravity: -18.75
   mass: 13000
   radius: 2.5
-  damping: 0.99
+  damping: 0.7

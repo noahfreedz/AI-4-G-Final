@@ -9,7 +9,14 @@ public class ParticleUpdate : MonoBehaviour
 
     [Header("Collision Settings")]
     [SerializeField] private bool enableTerrainCollision = true;
+    [SerializeField] public bool enableSphereCollision = true;
     [SerializeField] private float restitution = 0.5f;
+
+    [Header("Destruction Settings")]
+    [SerializeField] private bool enableDestructionTimer = true;
+    [SerializeField] private float destructionDelay = 5.0f;
+    [SerializeField] private bool fadeOut = true;
+    [SerializeField] private float fadeStartTime = 1.0f; // Start fading 1 second before destruction
 
     [Header("Physics Settings")]
     [SerializeField] private float gravity = -9.81f;
@@ -19,13 +26,13 @@ public class ParticleUpdate : MonoBehaviour
     [SerializeField] private float mass = 1.0f;
 
     [Tooltip("Radius in meters - sphere diameter will be 2x this value")]
-    [SerializeField] private float radius = 0.5f;
+    [SerializeField] public float radius = 0.5f;
 
     [Tooltip("Linear damping - closer to 1.0 = less energy loss")]
     [SerializeField] private float damping = 0.99f;
 
-    private Vector3 position;
-    private Vector3 velocity;
+    public Vector3 position;
+    public Vector3 velocity;
     private Vector3 acceleration;
     private Vector3 forceAccum;
 
@@ -33,6 +40,14 @@ public class ParticleUpdate : MonoBehaviour
     private SphereCollider sphereCollider;
     private CollisionData collisionData;
     private List<TerrainCollider> terrainColliders = new List<TerrainCollider>();
+    private List<ParticleUpdate> nearbyParticles = new List<ParticleUpdate>();
+
+    // Destruction timer
+    private bool destructionTimerStarted = false;
+    private float destructionTimer = 0f;
+    private Renderer particleRenderer;
+    private Color originalColor;
+    private bool hasCollided = false;
 
     void Start()
     {
@@ -48,16 +63,26 @@ public class ParticleUpdate : MonoBehaviour
             {
                 Debug.LogWarning($"ParticleUpdate on {gameObject.name}: No WaterSettings found in scene!");
             }
-            else
-            {
-                Debug.Log($"ParticleUpdate on {gameObject.name}: Found WaterSettings on {waterSettings.gameObject.name}");
-            }
         }
 
-        if (enableTerrainCollision)
+        if (enableTerrainCollision || enableSphereCollision)
         {
             InitializeCollisionSystem();
         }
+
+        // Get renderer for fade effect
+        particleRenderer = GetComponent<Renderer>();
+        if (particleRenderer != null && particleRenderer.material != null)
+        {
+            originalColor = particleRenderer.material.color;
+        }
+
+        ParticleCollisionManager.RegisterParticle(this);
+    }
+
+    void OnDestroy()
+    {
+        ParticleCollisionManager.UnregisterParticle(this);
     }
 
     void InitializeCollisionSystem()
@@ -88,9 +113,11 @@ public class ParticleUpdate : MonoBehaviour
         sphereCollider = new SphereCollider(radius);
         sphereCollider.SetBody(rigidBody);
 
-        TerrainCollider[] foundTerrains = FindObjectsOfType<TerrainCollider>();
-        terrainColliders.AddRange(foundTerrains);
-        Debug.Log($"ParticleUpdate on {gameObject.name}: Found {terrainColliders.Count} terrain colliders");
+        if (enableTerrainCollision)
+        {
+            TerrainCollider[] foundTerrains = FindObjectsOfType<TerrainCollider>();
+            terrainColliders.AddRange(foundTerrains);
+        }
 
         collisionData = new CollisionData();
         collisionData.Reset(10);
@@ -114,24 +141,47 @@ public class ParticleUpdate : MonoBehaviour
                 CheckTerrainCollisions();
             }
 
+            if (enableSphereCollision)
+            {
+                CheckSphereCollisions();
+            }
+
             transform.position = position;
         }
         else
         {
             waterSettings = FindObjectOfType<WaterSettings>();
         }
+
+        if (destructionTimerStarted && enableDestructionTimer)
+        {
+            destructionTimer += Time.fixedDeltaTime;
+
+            if (fadeOut && particleRenderer != null && particleRenderer.material != null)
+            {
+                float fadeThreshold = destructionDelay - fadeStartTime;
+                if (destructionTimer >= fadeThreshold)
+                {
+                    float fadeProgress = (destructionTimer - fadeThreshold) / fadeStartTime;
+                    Color newColor = originalColor;
+                    newColor.a = Mathf.Lerp(originalColor.a, 0f, fadeProgress);
+                    particleRenderer.material.color = newColor;
+                }
+            }
+
+            if (destructionTimer >= destructionDelay)
+            {
+                Destroy(gameObject);
+            }
+        }
     }
 
     void Integrate(float deltaTime)
     {
         Vector3 resultingAcc = forceAccum / mass;
-
         velocity += resultingAcc * deltaTime;
-
         velocity *= Mathf.Pow(damping, deltaTime);
-
         position += velocity * deltaTime;
-
         forceAccum = Vector3.zero;
     }
 
@@ -145,19 +195,14 @@ public class ParticleUpdate : MonoBehaviour
         if (waterSettings == null || !waterSettings.HasWaterSurface()) return;
 
         float waterHeight = waterSettings.GetWaterHeight();
-
         float depth = waterHeight - position.y;
 
-        if (depth <= -radius) return; 
+        if (depth <= -radius) return;
 
-
-        float maxDepth = radius * 2; 
+        float maxDepth = radius * 2;
         float submersionRatio = Mathf.Clamp01((depth + radius) / maxDepth);
-
         float totalVolume = (4.0f / 3.0f) * Mathf.PI * radius * radius * radius;
-
         float submergedVolume = totalVolume * submersionRatio;
-
         float buoyancyMagnitude = waterSettings.GetWaterDensity() * submergedVolume * Mathf.Abs(gravity);
 
         if (velocity.y > 0)
@@ -194,26 +239,85 @@ public class ParticleUpdate : MonoBehaviour
 
             int contacts = MeshCollisionDetection.SphereMesh(sphereCollider, meshCollider, collisionData);
 
-            if (contacts > 0)
+            if (contacts > 0 && !hasCollided)
             {
-                Debug.Log($"Collision detected! {contacts} contacts, penetration: {collisionData.contactArray[0].penetration}");
+                OnFirstCollision();
             }
         }
 
         if (collisionData.contactCount > 0)
         {
-            Debug.Log($"Resolving {collisionData.contactCount} contacts");
             ContactResolver.ResolveContacts(collisionData.contactArray, collisionData.contactCount, restitution);
-
             position = rigidBody.position;
             velocity = rigidBody.velocity;
         }
     }
 
+    void CheckSphereCollisions()
+    {
+        rigidBody.position = position;
+        rigidBody.velocity = velocity;
+        rigidBody.calculateDerivedData();
+        sphereCollider.UpdateInternals();
+
+        ParticleCollisionManager.GetNearbyParticles(this, position, radius, nearbyParticles);
+
+        collisionData.Reset(10);
+
+        foreach (ParticleUpdate other in nearbyParticles)
+        {
+            if (other == null || !other.enableSphereCollision) continue;
+
+            ParticleCollisionManager.IncrementChecks();
+
+            other.rigidBody.position = other.position;
+            other.rigidBody.velocity = other.velocity;
+            other.rigidBody.calculateDerivedData();
+            other.sphereCollider.UpdateInternals();
+
+            int contacts = CollisionTests.SphereSphere(sphereCollider, other.sphereCollider, collisionData);
+
+            if (contacts > 0)
+            {
+                ParticleCollisionManager.IncrementCollisions();
+
+                if (!hasCollided)
+                {
+                    OnFirstCollision();
+                }
+            }
+        }
+
+        if (collisionData.contactCount > 0)
+        {
+            ContactResolver.ResolveContacts(collisionData.contactArray, collisionData.contactCount, restitution);
+            position = rigidBody.position;
+            velocity = rigidBody.velocity;
+        }
+    }
+
+    void OnFirstCollision()
+    {
+        if (!hasCollided && enableDestructionTimer)
+        {
+            hasCollided = true;
+            destructionTimerStarted = true;
+            destructionTimer = 0f;
+            Debug.Log($"{gameObject.name}: Collision detected! Destruction in {destructionDelay} seconds.");
+        }
+    }
+
+    public Vector3 GetPosition() { return position; }
+    public float GetRadius() { return radius; }
+    public bool GetEnableSphereCollision() { return enableSphereCollision; }
+    public SphereCollider GetSphereCollider() { return sphereCollider; }
+    public RigidBody GetRigidBody() { return rigidBody; }
+    public bool IsMarkedForDestruction() { return destructionTimerStarted; }
+    public float GetDestructionTimeRemaining() { return Mathf.Max(0, destructionDelay - destructionTimer); }
+
     void OnDrawGizmos()
     {
-
-        Gizmos.color = Color.yellow;
+        Gizmos.color = destructionTimerStarted ? Color.red : Color.yellow;
         Vector3 pos = Application.isPlaying ? position : transform.position;
         Gizmos.DrawWireSphere(pos, radius);
 
@@ -221,6 +325,17 @@ public class ParticleUpdate : MonoBehaviour
         {
             Gizmos.color = Color.red;
             Gizmos.DrawRay(pos, velocity);
+
+            if (destructionTimerStarted)
+            {
+                float timeRemaining = destructionDelay - destructionTimer;
+                Gizmos.color = Color.red;
+                Gizmos.DrawWireSphere(pos, radius * 1.2f);
+
+                float maxHeight = 5f;
+                float currentHeight = (timeRemaining / destructionDelay) * maxHeight;
+                Gizmos.DrawLine(pos, pos + Vector3.up * currentHeight);
+            }
         }
     }
 }
