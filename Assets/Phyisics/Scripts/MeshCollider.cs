@@ -14,6 +14,10 @@ public class MeshCollider : Collider
     private float3 gridMin;
     private float3 gridMax;
 
+    public bool debugDrawTriangles = false;
+    public bool debugDrawGrid = false;
+    public bool debugDrawBounds = false;
+
     public MeshCollider(Mesh m, Vector3 meshScale) : base(ColliderType.Plane)
     {
         mesh = m;
@@ -114,6 +118,45 @@ public class MeshCollider : Collider
         v0 = TransformVertex(vertices[triangles[baseIndex]]);
         v1 = TransformVertex(vertices[triangles[baseIndex + 1]]);
         v2 = TransformVertex(vertices[triangles[baseIndex + 2]]);
+    }
+
+    public void DrawDebugGizmos()
+    {
+        if (debugDrawBounds)
+        {
+            Gizmos.color = Color.cyan;
+            float3 center = (gridMin + gridMax) / 2f;
+            float3 size = gridMax - gridMin;
+            Gizmos.DrawWireCube((Vector3)center, (Vector3)size);
+        }
+
+        if (debugDrawGrid)
+        {
+            Gizmos.color = Color.yellow;
+            foreach (var cell in spatialGrid.Keys)
+            {
+                float3 cellMin = new float3(cell.x * cellSize, gridMin.y, cell.y * cellSize);
+                float3 cellMax = new float3((cell.x + 1) * cellSize, gridMax.y, (cell.y + 1) * cellSize);
+                float3 cellCenter = (cellMin + cellMax) / 2f;
+                float3 cellSize3D = new float3(cellSize, gridMax.y - gridMin.y, cellSize);
+                Gizmos.DrawWireCube((Vector3)cellCenter, (Vector3)cellSize3D);
+            }
+        }
+
+        if (debugDrawTriangles)
+        {
+            Gizmos.color = Color.green;
+            for (int i = 0; i < triangles.Length; i += 3)
+            {
+                float3 v0 = TransformVertex(vertices[triangles[i]]);
+                float3 v1 = TransformVertex(vertices[triangles[i + 1]]);
+                float3 v2 = TransformVertex(vertices[triangles[i + 2]]);
+
+                Gizmos.DrawLine((Vector3)v0, (Vector3)v1);
+                Gizmos.DrawLine((Vector3)v1, (Vector3)v2);
+                Gizmos.DrawLine((Vector3)v2, (Vector3)v0);
+            }
+        }
     }
 
     public float3 GetScale() { return (float3)scale; }

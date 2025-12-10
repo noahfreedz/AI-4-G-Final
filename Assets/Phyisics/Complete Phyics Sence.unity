@@ -212,7 +212,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   terrain: {fileID: 510024115}
-  resolution: 116
+  resolution: 215
   generateOnStart: 1
 --- !u!1 &659733835
 GameObject:
@@ -386,7 +386,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 850480923}
   m_LocalRotation: {x: 0.2060328, y: -0, z: -0, w: 0.9785451}
-  m_LocalPosition: {x: 147.2, y: 84.4, z: 37.2}
+  m_LocalPosition: {x: 1005, y: 81.8, z: 793.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -427,6 +427,7 @@ GameObject:
   - component: {fileID: 1462394438}
   - component: {fileID: 1462394441}
   - component: {fileID: 1462394442}
+  - component: {fileID: 1462394443}
   m_Layer: 0
   m_Name: Game Manager
   m_TagString: Untagged
@@ -535,8 +536,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   ballPrefab: {fileID: 511522759457762948, guid: 41db4400c3cd4584199230c38702d10f, type: 3}
   numberOfBalls: 100
-  player: {fileID: 0}
-  spawnRadius: 20
+  player: {fileID: 850480926}
+  spawnRadius: 182.85
   spawnInFullCircle: 1
   frontArcAngle: 120
   minHeight: 10
@@ -544,3 +545,29 @@ MonoBehaviour:
   heightRelativeToPlayer: 1
   spawnOnStart: 0
   spawnKey: 32
+--- !u!114 &1462394443
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462394437}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ce13139b257e667489f77344983380bf, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  useSpatialGrid: 1
+  cellSize: 5
+  autoDetectBounds: 1
+  terrain: {fileID: 510024115}
+  verticalBoundsMargin: 50
+  manualBoundsCenter: {x: 0, y: 0, z: 0}
+  manualBoundsSize: {x: 100, y: 100, z: 100}
+  autoAdjustCellSize: 0
+  targetParticlesPerCell: 5
+  minCellSize: 1
+  maxCellSize: 20
+  drawSpatialGrid: 1
+  drawBounds: 1
+  drawTerrainBounds: 1
