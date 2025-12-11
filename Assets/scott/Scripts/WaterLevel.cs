@@ -24,6 +24,8 @@ public class WaterLevel : MonoBehaviour
 
     // Cached water height so we don't recompute all the time
     private float cachedWaterHeight = float.NaN;
+    private float minTerrainHeight = 0f;
+    private float maxTerrainHeight = 100f;
 
     void Start()
     {
@@ -61,8 +63,6 @@ public class WaterLevel : MonoBehaviour
         waterPlane = GameObject.CreatePrimitive(PrimitiveType.Plane);
         waterPlane.name = "Water Plane";
 
-        // Optional: don't parent if your WaterLevel object is moved/scaled weirdly
-        // waterPlane.transform.SetParent(transform);
         waterPlane.transform.SetParent(transform, true);
 
         TerrainData terrainData = terrain.terrainData;
@@ -103,7 +103,6 @@ public class WaterLevel : MonoBehaviour
             simpleMaterial.EnableKeyword("_ALPHABLEND_ON");
             simpleMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             simpleMaterial.renderQueue = 3000;
-            waterPlane.AddComponent<WaterSettings>();
             waterPlane.GetComponent<Renderer>().material = simpleMaterial;
         }
 
@@ -144,6 +143,52 @@ public class WaterLevel : MonoBehaviour
     }
 
     /// <summary>
+    /// Set the water height directly in world space units.
+    /// This will update the normalized waterLevel value accordingly.
+    /// </summary>
+    public void SetWaterHeight(float worldHeight)
+    {
+        if (terrain == null)
+        {
+            Debug.LogWarning("Cannot set water height: terrain not assigned");
+            return;
+        }
+
+        // Make sure we have current min/max values
+        RecalculateTerrainHeightRange();
+
+        // Convert world height to normalized 0-1 range
+        if (maxTerrainHeight > minTerrainHeight)
+        {
+            waterLevel = Mathf.InverseLerp(minTerrainHeight, maxTerrainHeight, worldHeight);
+            waterLevel = Mathf.Clamp01(waterLevel);
+        }
+        else
+        {
+            waterLevel = 0.5f;
+        }
+
+        // Update cached height
+        cachedWaterHeight = worldHeight;
+
+        // Update water plane position if it exists
+        UpdateWaterPlanePosition();
+    }
+
+    /// <summary>
+    /// Update the water plane's Y position to match current water height
+    /// </summary>
+    private void UpdateWaterPlanePosition()
+    {
+        if (waterPlane != null)
+        {
+            Vector3 pos = waterPlane.transform.position;
+            pos.y = GetWaterHeight();
+            waterPlane.transform.position = pos;
+        }
+    }
+
+    /// <summary>
     /// Recalculate water height based on actual sampled terrain heights.
     /// This accounts for however you've sculpted the terrain, not just size.y.
     /// </summary>
@@ -155,13 +200,32 @@ public class WaterLevel : MonoBehaviour
             return;
         }
 
+        RecalculateTerrainHeightRange();
+
+        if (!float.IsFinite(minTerrainHeight) || !float.IsFinite(maxTerrainHeight))
+        {
+            cachedWaterHeight = terrain.transform.position.y;
+            return;
+        }
+
+        // Now waterLevel = 0 means minHeight, 1 means maxHeight
+        cachedWaterHeight = Mathf.Lerp(minTerrainHeight, maxTerrainHeight, waterLevel);
+    }
+
+    /// <summary>
+    /// Sample the terrain to find min and max heights
+    /// </summary>
+    private void RecalculateTerrainHeightRange()
+    {
+        if (terrain == null) return;
+
         TerrainData terrainData = terrain.terrainData;
         Vector3 terrainPos = terrain.transform.position;
 
         // Sample across the terrain to find the min and max *actual* heights
         const int samplesPerAxis = 64; // can tweak if you want more/less precision
-        float minHeight = float.PositiveInfinity;
-        float maxHeight = float.NegativeInfinity;
+        minTerrainHeight = float.PositiveInfinity;
+        maxTerrainHeight = float.NegativeInfinity;
 
         for (int z = 0; z < samplesPerAxis; z++)
         {
@@ -175,19 +239,10 @@ public class WaterLevel : MonoBehaviour
                 float worldZ = terrainPos.z + tz * terrainData.size.z;
 
                 float h = terrain.SampleHeight(new Vector3(worldX, 0f, worldZ));
-                if (h < minHeight) minHeight = h;
-                if (h > maxHeight) maxHeight = h;
+                if (h < minTerrainHeight) minTerrainHeight = h;
+                if (h > maxTerrainHeight) maxTerrainHeight = h;
             }
         }
-
-        if (!float.IsFinite(minHeight) || !float.IsFinite(maxHeight))
-        {
-            cachedWaterHeight = terrainPos.y;
-            return;
-        }
-
-        // Now waterLevel = 0 means minHeight, 1 means maxHeight
-        cachedWaterHeight = Mathf.Lerp(minHeight, maxHeight, waterLevel);
     }
 
 #if UNITY_EDITOR
@@ -197,13 +252,7 @@ public class WaterLevel : MonoBehaviour
         if (dynamicHeight && !Application.isPlaying)
         {
             RecalculateWaterHeight();
-
-            if (waterPlane != null)
-            {
-                Vector3 pos = waterPlane.transform.position;
-                pos.y = GetWaterHeight();
-                waterPlane.transform.position = pos;
-            }
+            UpdateWaterPlanePosition();
         }
     }
 

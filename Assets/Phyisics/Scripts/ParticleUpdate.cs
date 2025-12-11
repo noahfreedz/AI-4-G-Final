@@ -16,7 +16,7 @@ public class ParticleUpdate : MonoBehaviour
     [SerializeField] private bool enableDestructionTimer = true;
     [SerializeField] private float destructionDelay = 5.0f;
     [SerializeField] private bool fadeOut = true;
-    [SerializeField] private float fadeStartTime = 1.0f; // Start fading 1 second before destruction
+    [SerializeField] private float fadeStartTime = 1.0f; 
 
     [Header("Physics Settings")]
     [SerializeField] private float gravity = -9.81f;
@@ -70,7 +70,6 @@ public class ParticleUpdate : MonoBehaviour
             InitializeCollisionSystem();
         }
 
-        // Get renderer for fade effect
         particleRenderer = GetComponent<Renderer>();
         if (particleRenderer != null && particleRenderer.material != null)
         {
