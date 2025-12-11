@@ -48,7 +48,7 @@ public class TerrainToMesh : MonoBehaviour
             for (int x = 0; x < vertexCountX; x++)
             {
                 int index = z * vertexCountX + x;
-
+                // to put them between 0 - 1
                 float heightSampleX = (float)x / (vertexCountX - 1);
                 float heightSampleZ = (float)z / (vertexCountZ - 1);
                 float height1 = terrainData.GetInterpolatedHeight(heightSampleX, heightSampleZ);
