@@ -277,6 +277,8 @@ public class TerrainErosion : MonoBehaviour
         }
     }
 
+
+    // finds Shore by looking at nabors 
     private void FindWaterEdge()
     {
         waterEdgeCells = new HashSet<Vector2Int>();
@@ -315,11 +317,9 @@ public class TerrainErosion : MonoBehaviour
 
     private void ErodeFromWaterEdge()
     {
-        // Use flood-fill approach from water edge
         Queue<Vector2Int> erosionQueue = new Queue<Vector2Int>();
         HashSet<Vector2Int> processed = new HashSet<Vector2Int>();
 
-        // Start from all edge cells
         foreach (var edge in waterEdgeCells)
         {
             erosionQueue.Enqueue(edge);
@@ -328,7 +328,6 @@ public class TerrainErosion : MonoBehaviour
 
         int currentDepth = 0;
 
-        // Process in waves from edge
         while (erosionQueue.Count > 0 && currentDepth < erosionDepth)
         {
             int currentLevelCount = erosionQueue.Count;
@@ -364,7 +363,6 @@ public class TerrainErosion : MonoBehaviour
                 // Spread to neighbors
                 List<Vector2Int> neighbors = GetUnderwaterNeighbors(cell);
 
-                // Sort by depth if flowing toward deepest
                 if (flowTowardDeepest)
                 {
                     neighbors.Sort((a, b) =>
@@ -377,11 +375,9 @@ public class TerrainErosion : MonoBehaviour
                     if (processed.Contains(neighbor))
                         continue;
 
-                    // Probability check for natural variation
                     if (random.NextDouble() > spreadProbability)
                         continue;
 
-                    // Slope bias - prefer downward slopes
                     if (slopeBias > 0)
                     {
                         float currentHeight = heights[cell.y, cell.x];
@@ -389,7 +385,6 @@ public class TerrainErosion : MonoBehaviour
 
                         if (neighborHeight > currentHeight)
                         {
-                            // Going uphill - reduce probability
                             if (random.NextDouble() > (1f - slopeBias))
                                 continue;
                         }
@@ -424,7 +419,7 @@ public class TerrainErosion : MonoBehaviour
                 if (distance > depositRadius)
                     continue;
 
-                // Deposit more in the center, less at edges
+
                 float depositWeight = 1f - (distance / depositRadius);
                 depositWeight = Mathf.Pow(depositWeight, 2f); // Square for more concentration
 

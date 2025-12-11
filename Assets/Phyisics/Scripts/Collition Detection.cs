@@ -568,36 +568,4 @@ public static class MeshCollisionDetection
         float wFinal = vc * denom;
         return a + ab * vFinal + ac * wFinal;
     }
-
-    public static bool TestSphereMesh(SphereCollider sphere, MeshCollider mesh)
-    {
-        sphere.UpdateInternals();
-        mesh.UpdateInternals();
-
-        float3 spherePos = new float3(
-            sphere.GetTransform().c3.x,
-            sphere.GetTransform().c3.y,
-            sphere.GetTransform().c3.z
-        );
-
-        List<int> potentialTriangles = new List<int>();
-        mesh.GetPotentialCollisionTriangles(spherePos, sphere.radius, potentialTriangles);
-
-        foreach (int triIndex in potentialTriangles)
-        {
-            mesh.GetTriangle(triIndex, out float3 v0, out float3 v1, out float3 v2);
-
-            float3 closestPoint = ClosestPointOnTriangle(spherePos, v0, v1, v2);
-
-            float3 delta = spherePos - closestPoint;
-            float distanceSquared = math.lengthsq(delta);
-
-            if (distanceSquared < sphere.radius * sphere.radius)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
 }
