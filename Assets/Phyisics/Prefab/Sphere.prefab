@@ -167,9 +167,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waterSettings: {fileID: 0}
+  wfc: {fileID: 0}
   enableTerrainCollision: 1
+  enableSphereCollision: 1
   restitution: 0.5
+  enableDestructionTimer: 1
+  destructionDelay: 5
+  fadeOut: 1
+  fadeStartTime: 1
   gravity: -18.75
   mass: 13000
   radius: 2.5
   damping: 0.7
+  position: {x: 0, y: 0, z: 0}
+  velocity: {x: 0, y: 0, z: 0}

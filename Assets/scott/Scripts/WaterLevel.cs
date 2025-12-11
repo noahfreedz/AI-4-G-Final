@@ -103,6 +103,7 @@ public class WaterLevel : MonoBehaviour
             simpleMaterial.EnableKeyword("_ALPHABLEND_ON");
             simpleMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             simpleMaterial.renderQueue = 3000;
+            waterPlane.AddComponent<WaterSettings>();
             waterPlane.GetComponent<Renderer>().material = simpleMaterial;
         }
 

@@ -622,7 +622,7 @@ MonoBehaviour:
     restitution: 0.1
     friction: 0.2
     drag: 0.8
-    is_water: 1
+    is_water: 0
     water_density: 1
   - name: Shallow Water
     height: 0.11
@@ -630,7 +630,7 @@ MonoBehaviour:
     restitution: 0.2
     friction: 0.3
     drag: 0.5
-    is_water: 1
+    is_water: 0
     water_density: 0.8
   - name: Sand
     height: 0.14
