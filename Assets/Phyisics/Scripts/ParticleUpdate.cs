@@ -1,11 +1,14 @@
-using UnityEngine;
-using Unity.Mathematics;
 using System.Collections.Generic;
+using Unity.Mathematics;
+using UnityEngine;
 
 public class ParticleUpdate : MonoBehaviour
 {
     [Header("Water Settings")]
     [SerializeField] private WaterSettings waterSettings;
+
+    [Header("Terrain Settings")]
+    [SerializeField] private WaveFunctionCollapse wfc;
 
     [Header("Collision Settings")]
     [SerializeField] private bool enableTerrainCollision = true;
@@ -16,7 +19,7 @@ public class ParticleUpdate : MonoBehaviour
     [SerializeField] private bool enableDestructionTimer = true;
     [SerializeField] private float destructionDelay = 5.0f;
     [SerializeField] private bool fadeOut = true;
-    [SerializeField] private float fadeStartTime = 1.0f; 
+    [SerializeField] private float fadeStartTime = 1.0f;
 
     [Header("Physics Settings")]
     [SerializeField] private float gravity = -9.81f;
@@ -49,6 +52,11 @@ public class ParticleUpdate : MonoBehaviour
     private Color originalColor;
     private bool hasCollided = false;
 
+    // Current terrain properties
+    private WaveFunctionCollapse.HeightColorStop currentTerrainProperties;
+    private float terrainDrag = 0f;
+    private bool onTerrainWater = false;
+
     void Start()
     {
         position = transform.position;
@@ -62,6 +70,15 @@ public class ParticleUpdate : MonoBehaviour
             if (waterSettings == null)
             {
                 Debug.LogWarning($"ParticleUpdate on {gameObject.name}: No WaterSettings found in scene!");
+            }
+        }
+
+        if (wfc == null)
+        {
+            wfc = FindObjectOfType<WaveFunctionCollapse>();
+            if (wfc == null)
+            {
+                Debug.LogWarning($"ParticleUpdate on {gameObject.name}: No WaveFunctionCollapse found in scene!");
             }
         }
 
@@ -128,10 +145,20 @@ public class ParticleUpdate : MonoBehaviour
         {
             float deltaTime = Time.fixedDeltaTime;
 
+            // Update terrain properties based on current position
+            UpdateTerrainProperties();
+
             Vector3 gravityForce = new Vector3(0, gravity * mass, 0);
             AddForce(gravityForce);
 
+            // Apply buoyancy from water settings
             ApplyBuoyancy();
+
+            // Apply terrain-based water buoyancy if on water terrain
+            if (onTerrainWater && currentTerrainProperties != null)
+            {
+                ApplyTerrainWaterBuoyancy();
+            }
 
             Integrate(deltaTime);
 
@@ -144,6 +171,9 @@ public class ParticleUpdate : MonoBehaviour
             {
                 CheckSphereCollisions();
             }
+
+            // Apply terrain drag after collisions
+            ApplyTerrainDrag();
 
             transform.position = position;
         }
@@ -172,6 +202,76 @@ public class ParticleUpdate : MonoBehaviour
             {
                 Destroy(gameObject);
             }
+        }
+    }
+
+    void UpdateTerrainProperties()
+    {
+        if (wfc == null) return;
+
+        currentTerrainProperties = wfc.GetTerrainPropertiesAtPosition(position);
+
+        if (currentTerrainProperties != null)
+        {
+            terrainDrag = currentTerrainProperties.drag;
+            onTerrainWater = currentTerrainProperties.is_water;
+        }
+        else
+        {
+            terrainDrag = 0f;
+            onTerrainWater = false;
+        }
+    }
+
+    void ApplyTerrainDrag()
+    {
+        if (terrainDrag > 0f && velocity.sqrMagnitude > 0.01f)
+        {
+            velocity *= (1.0f - terrainDrag * Time.fixedDeltaTime);
+        }
+    }
+
+    void ApplyTerrainWaterBuoyancy()
+    {
+        if (currentTerrainProperties == null || !currentTerrainProperties.is_water) return;
+
+        // Get terrain height at current position
+        float terrainHeight = 0f;
+        if (wfc != null && wfc.target_terrain != null)
+        {
+            Vector3 terrainPos = wfc.target_terrain.transform.position;
+            terrainHeight = wfc.target_terrain.SampleHeight(position) + terrainPos.y;
+        }
+
+        // Estimate water surface height (terrain height + small offset for shallow water)
+        float waterSurfaceHeight = terrainHeight + 1.0f;
+        float depth = waterSurfaceHeight - position.y;
+
+        if (depth <= -radius) return;
+
+        float maxDepth = radius * 2;
+        float submersionRatio = Mathf.Clamp01((depth + radius) / maxDepth);
+        float totalVolume = (4.0f / 3.0f) * Mathf.PI * radius * radius * radius;
+        float submergedVolume = totalVolume * submersionRatio;
+
+        // Use terrain water density
+        float waterDensity = currentTerrainProperties.water_density * 1000f; // Convert to kg/m³
+        float buoyancyMagnitude = waterDensity * submergedVolume * Mathf.Abs(gravity);
+
+        if (velocity.y > 0)
+        {
+            float velocityDamping = Mathf.Max(0.1f, 1.0f - velocity.y * 0.15f);
+            buoyancyMagnitude *= velocityDamping;
+        }
+
+        Vector3 buoyancyForce = new Vector3(0, buoyancyMagnitude, 0);
+        AddForce(buoyancyForce);
+
+        // Apply water drag
+        if (velocity.sqrMagnitude > 0.01f)
+        {
+            Vector3 dragForce = -velocity * currentTerrainProperties.drag * 10f * submersionRatio;
+            AddForce(dragForce);
         }
     }
 
@@ -246,9 +346,40 @@ public class ParticleUpdate : MonoBehaviour
 
         if (collisionData.contactCount > 0)
         {
-            ContactResolver.ResolveContacts(collisionData.contactArray, collisionData.contactCount, restitution);
+            // Get terrain-specific restitution
+            float terrainRestitution = restitution;
+            if (currentTerrainProperties != null)
+            {
+                terrainRestitution = currentTerrainProperties.restitution;
+            }
+
+            ContactResolver.ResolveContacts(collisionData.contactArray, collisionData.contactCount, terrainRestitution);
             position = rigidBody.position;
             velocity = rigidBody.velocity;
+
+            // Apply friction from terrain
+            if (currentTerrainProperties != null && currentTerrainProperties.friction > 0f)
+            {
+                ApplyTerrainFriction();
+            }
+        }
+    }
+
+    void ApplyTerrainFriction()
+    {
+        if (currentTerrainProperties == null) return;
+
+        // Get horizontal velocity
+        Vector3 horizontalVelocity = new Vector3(velocity.x, 0, velocity.z);
+
+        if (horizontalVelocity.sqrMagnitude > 0.01f)
+        {
+            // Apply friction to horizontal movement
+            float frictionFactor = 1.0f - (currentTerrainProperties.friction * Time.fixedDeltaTime * 5f);
+            frictionFactor = Mathf.Clamp01(frictionFactor);
+
+            velocity.x *= frictionFactor;
+            velocity.z *= frictionFactor;
         }
     }
 
@@ -313,6 +444,7 @@ public class ParticleUpdate : MonoBehaviour
     public RigidBody GetRigidBody() { return rigidBody; }
     public bool IsMarkedForDestruction() { return destructionTimerStarted; }
     public float GetDestructionTimeRemaining() { return Mathf.Max(0, destructionDelay - destructionTimer); }
+    public WaveFunctionCollapse.HeightColorStop GetCurrentTerrainProperties() { return currentTerrainProperties; }
 
     void OnDrawGizmos()
     {
@@ -324,6 +456,13 @@ public class ParticleUpdate : MonoBehaviour
         {
             Gizmos.color = Color.red;
             Gizmos.DrawRay(pos, velocity);
+
+            // Draw terrain type indicator
+            if (currentTerrainProperties != null)
+            {
+                Gizmos.color = currentTerrainProperties.color;
+                Gizmos.DrawWireSphere(pos, radius * 0.5f);
+            }
 
             if (destructionTimerStarted)
             {
