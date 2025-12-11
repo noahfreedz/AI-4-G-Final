@@ -6,6 +6,7 @@ public class TerrainRuntimeGUI : MonoBehaviour
     public RawHeightmapImporter heightmapImporter;
     public TerrainErosion terrainErosion;
     public WaterLevel waterLevel;
+    public WaveFunctionCollapse waveFunctionCollapse;
 
     [Header("GUI Settings")]
     public KeyCode toggleKey = KeyCode.Tab;
@@ -235,6 +236,7 @@ public class TerrainRuntimeGUI : MonoBehaviour
             terrainErosion.RefreshTerrainData();
         }
 
+        waveFunctionCollapse.RefreshTerrainColors();
         Debug.Log("Complete heightmap applied (base + random + smoothing)");
     }
 
