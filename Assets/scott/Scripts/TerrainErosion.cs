@@ -44,6 +44,18 @@ public class TerrainErosion : MonoBehaviour
     [Range(0f, 1f)]
     public float slopeBias = 0.6f;
 
+    [Header("Sediment Transport")]
+    [Tooltip("Push eroded sediment toward the center (for island building)")]
+    public bool transportToCenter = false;
+
+    [Tooltip("Strength of sediment deposition (higher = more buildup at center)")]
+    [Range(0f, 1f)]
+    public float depositionStrength = 0.5f;
+
+    [Tooltip("Radius around center where sediment accumulates (in normalized units)")]
+    [Range(0.1f, 0.8f)]
+    public float depositionRadius = 0.3f;
+
     [Header("Runtime Control")]
     [Tooltip("If true, erosion will run continuously in Play Mode")]
     public bool autoErode = false;
@@ -75,6 +87,10 @@ public class TerrainErosion : MonoBehaviour
     private HashSet<Vector2Int> waterEdgeCells;
     private float[][] erosionBrushWeights;
 
+    // For sediment transport
+    private float totalSedimentEroded = 0f;
+    private Vector2Int terrainCenter;
+
     void Start()
     {
         if (terrain == null)
@@ -96,14 +112,36 @@ public class TerrainErosion : MonoBehaviour
         terrainPos = terrain.transform.position;
         terrainSize = terrainData.size;
 
+        // IMPORTANT: Get the CURRENT terrain heights (not cached from before Play mode)
+        // This ensures we work with whatever terrain was generated at runtime
         heights = terrainData.GetHeights(0, 0, resolution, resolution);
         random = new System.Random();
 
+        terrainCenter = new Vector2Int(resolution / 2, resolution / 2);
+
         InitializeErosionBrush();
+
+        // Refresh underwater detection based on current terrain
+        RefreshTerrainData();
+
+        Debug.Log($"Found {underwaterCells.Count} underwater cells, {waterEdgeCells.Count} edge cells");
+    }
+
+    /// <summary>
+    /// Call this after generating new terrain to update erosion system
+    /// </summary>
+    public void RefreshTerrainData()
+    {
+        if (terrain == null) return;
+
+        // Reload current heights from terrain
+        heights = terrainData.GetHeights(0, 0, resolution, resolution);
+
+        // Recalculate underwater areas
         FindUnderwaterCells();
         FindWaterEdge();
 
-        Debug.Log($"Found {underwaterCells.Count} underwater cells, {waterEdgeCells.Count} edge cells");
+        Debug.Log($"Terrain data refreshed. Underwater cells: {underwaterCells.Count}, Edge cells: {waterEdgeCells.Count}");
     }
 
     void Update()
@@ -162,8 +200,17 @@ public class TerrainErosion : MonoBehaviour
             return;
         }
 
+        // Reset sediment counter
+        totalSedimentEroded = 0f;
+
         // Erode from the water edge inward
         ErodeFromWaterEdge();
+
+        // Deposit sediment toward center if enabled
+        if (transportToCenter && totalSedimentEroded > 0)
+        {
+            DepositSedimentAtCenter();
+        }
 
         // Optional smoothing
         if (smoothingPasses > 0)
@@ -178,7 +225,8 @@ public class TerrainErosion : MonoBehaviour
         terrainData.SetHeights(0, 0, heights);
         erosionSteps++;
 
-        Debug.Log($"Erosion step {erosionSteps} complete. Eroded near {waterEdgeCells.Count} edge cells. Auto steps: {autoErosionStepsCompleted}/{(maxAutoSteps > 0 ? maxAutoSteps.ToString() : "?")}");
+        Debug.Log($"Erosion step {erosionSteps} complete. Eroded near {waterEdgeCells.Count} edge cells. " +
+                  $"Sediment: {totalSedimentEroded:F4}. Auto steps: {autoErosionStepsCompleted}/{(maxAutoSteps > 0 ? maxAutoSteps.ToString() : "?")}");
     }
 
     private void InitializeErosionBrush()
@@ -299,7 +347,19 @@ public class TerrainErosion : MonoBehaviour
                     erosionAmount *= (1f + depth * 2f);
                 }
 
-                ErodeCell(cell.x, cell.y, erosionAmount);
+                // Reduce erosion near center if transporting sediment there
+                if (transportToCenter)
+                {
+                    float distToCenter = GetDistanceToCenter(cell.x, cell.y);
+                    if (distToCenter < depositionRadius)
+                    {
+                        // Reduce erosion near center
+                        erosionAmount *= Mathf.Lerp(0.3f, 1f, distToCenter / depositionRadius);
+                    }
+                }
+
+                float actualEroded = ErodeCell(cell.x, cell.y, erosionAmount);
+                totalSedimentEroded += actualEroded;
 
                 // Spread to neighbors
                 List<Vector2Int> neighbors = GetUnderwaterNeighbors(cell);
@@ -344,6 +404,42 @@ public class TerrainErosion : MonoBehaviour
         }
     }
 
+    private void DepositSedimentAtCenter()
+    {
+        // Deposit sediment in a radius around the center
+        int depositRadius = Mathf.RoundToInt(depositionRadius * resolution);
+        float sedimentPerCell = (totalSedimentEroded * depositionStrength) / (depositRadius * depositRadius * Mathf.PI);
+
+        for (int y = -depositRadius; y <= depositRadius; y++)
+        {
+            for (int x = -depositRadius; x <= depositRadius; x++)
+            {
+                int cellX = terrainCenter.x + x;
+                int cellY = terrainCenter.y + y;
+
+                if (cellX < 0 || cellX >= resolution || cellY < 0 || cellY >= resolution)
+                    continue;
+
+                float distance = Mathf.Sqrt(x * x + y * y);
+                if (distance > depositRadius)
+                    continue;
+
+                // Deposit more in the center, less at edges
+                float depositWeight = 1f - (distance / depositRadius);
+                depositWeight = Mathf.Pow(depositWeight, 2f); // Square for more concentration
+
+                heights[cellY, cellX] = Mathf.Min(1f, heights[cellY, cellX] + sedimentPerCell * depositWeight);
+            }
+        }
+    }
+
+    private float GetDistanceToCenter(int x, int y)
+    {
+        float dx = (x - terrainCenter.x) / (float)resolution;
+        float dy = (y - terrainCenter.y) / (float)resolution;
+        return Mathf.Sqrt(dx * dx + dy * dy);
+    }
+
     private List<Vector2Int> GetUnderwaterNeighbors(Vector2Int cell)
     {
         List<Vector2Int> neighbors = new List<Vector2Int>();
@@ -378,7 +474,7 @@ public class TerrainErosion : MonoBehaviour
         return (waterHeight - worldPos.y) / terrainSize.y;
     }
 
-    private void ErodeCell(int x, int y, float amount)
+    private float ErodeCell(int x, int y, float amount)
     {
         // Check if slope is too steep to erode (prevents cutting down mountains)
         float currentHeight = heights[y, x];
@@ -405,8 +501,10 @@ public class TerrainErosion : MonoBehaviour
         // Don't erode if slope is too steep
         if (slope > maxErodableSlope)
         {
-            return;
+            return 0f;
         }
+
+        float totalEroded = 0f;
 
         // Erode with brush
         for (int dy = -erosionRadius; dy <= erosionRadius; dy++)
@@ -419,10 +517,15 @@ public class TerrainErosion : MonoBehaviour
                 if (nx >= 0 && nx < resolution && ny >= 0 && ny < resolution)
                 {
                     float weight = erosionBrushWeights[dy + erosionRadius][dx + erosionRadius];
-                    heights[ny, nx] = Mathf.Max(0, heights[ny, nx] - amount * weight);
+                    float erosionAmount = amount * weight;
+                    float oldHeight = heights[ny, nx];
+                    heights[ny, nx] = Mathf.Max(0, heights[ny, nx] - erosionAmount);
+                    totalEroded += oldHeight - heights[ny, nx];
                 }
             }
         }
+
+        return totalEroded;
     }
 
     private void SmoothUnderwater()
@@ -490,6 +593,15 @@ public class TerrainErosion : MonoBehaviour
                 Vector3 pos = GetWorldPosition(cell.x, cell.y);
                 Gizmos.DrawWireCube(pos, Vector3.one);
             }
+        }
+
+        // Draw deposition zone
+        if (transportToCenter)
+        {
+            Gizmos.color = new Color(0f, 1f, 0f, 0.2f);
+            Vector3 centerPos = GetWorldPosition(terrainCenter.x, terrainCenter.y);
+            float radius = depositionRadius * terrainSize.x;
+            Gizmos.DrawWireSphere(centerPos, radius);
         }
     }
 #endif

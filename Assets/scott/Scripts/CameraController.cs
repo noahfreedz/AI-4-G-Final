@@ -41,6 +41,10 @@ public class CameraController : MonoBehaviour
 
     void HandleMouseLook()
     {
+        // Only look around if cursor is locked
+        if (Cursor.lockState != CursorLockMode.Locked)
+            return;
+
         float mouseX = Input.GetAxis("Mouse X") * mouseSensitivity;
         float mouseY = Input.GetAxis("Mouse Y") * mouseSensitivity;
 
@@ -50,7 +54,6 @@ public class CameraController : MonoBehaviour
             rotationX -= mouseY;
 
         rotationX = Mathf.Clamp(rotationX, minVerticalAngle, maxVerticalAngle);
-
         rotationY += mouseX;
 
         transform.eulerAngles = new Vector3(rotationX, rotationY, 0f);
@@ -58,16 +61,14 @@ public class CameraController : MonoBehaviour
 
     void HandleMovement()
     {
-      
-        float horizontal = Input.GetAxisRaw("Horizontal"); 
-        float vertical = Input.GetAxisRaw("Vertical");  
+        float horizontal = Input.GetAxisRaw("Horizontal");
+        float vertical = Input.GetAxisRaw("Vertical");
 
         bool isSprinting = Input.GetKey(KeyCode.LeftShift);
         float currentSpeed = isSprinting ? moveSpeed * sprintMultiplier : moveSpeed;
 
         Vector3 forward = transform.forward;
         Vector3 right = transform.right;
-
         forward.y = 0f;
         right.y = 0f;
         forward.Normalize();
@@ -86,7 +87,6 @@ public class CameraController : MonoBehaviour
         Vector3 targetVelocity = desiredDirection * currentSpeed;
         targetVelocity.y = verticalInput * verticalSpeed;
 
-       
         float accelRate = desiredDirection.sqrMagnitude > 0 || verticalInput != 0 ? acceleration : deceleration;
         currentVelocity = Vector3.Lerp(currentVelocity, targetVelocity, accelRate * Time.deltaTime);
 
@@ -111,9 +111,17 @@ public class CameraController : MonoBehaviour
 
         if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked)
         {
-            Cursor.lockState = CursorLockMode.Locked;
-            Cursor.visible = false;
+            if (!IsMouseOverGUI())
+            {
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+            }
         }
+    }
+
+    private bool IsMouseOverGUI()
+    {
+        return GUIUtility.hotControl != 0;
     }
 
     void OnApplicationFocus(bool hasFocus)

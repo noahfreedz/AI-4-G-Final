@@ -386,7 +386,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 850480923}
   m_LocalRotation: {x: 0.2060328, y: -0, z: -0, w: 0.9785451}
-  m_LocalPosition: {x: 1005, y: 81.8, z: 793.4}
+  m_LocalPosition: {x: 1005, y: 253.79, z: 793.4}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -428,6 +428,7 @@ GameObject:
   - component: {fileID: 1462394441}
   - component: {fileID: 1462394442}
   - component: {fileID: 1462394443}
+  - component: {fileID: 1462394444}
   m_Layer: 0
   m_Name: Game Manager
   m_TagString: Untagged
@@ -448,7 +449,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   terrain: {fileID: 510024115}
-  waterLevel: 0.224
+  waterLevel: 0.298
   waterMaterial: {fileID: 0}
   dynamicHeight: 0
 --- !u!114 &1462394439
@@ -464,14 +465,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   terrain: {fileID: 510024115}
+  useRandomGeneration: 1
   heightmapLayers:
   - rawFile: {fileID: 102900000, guid: 650c2156ba0f0044e9efa6f6f411ce98, type: 3}
-    blendAmount: 0.476
+    blendAmount: 0.838
   - rawFile: {fileID: 102900000, guid: 357a2cb2308d30b46946d9cab6f77471, type: 3}
-    blendAmount: 0.452
+    blendAmount: 1
   - rawFile: {fileID: 102900000, guid: ce6384f3e48ece94c9597a97e005ebc5, type: 3}
-    blendAmount: 0.4
+    blendAmount: 0.876
   rawResolution: 512
+  useIslandMode: 0
+  islandMix: 0.5
+  distanceFunction: 4
+  islandScale: 1
+  distanceExponent: 2
   octaves: 3
   baseFrequency: 4
   lacunarity: 2.78
@@ -517,11 +524,14 @@ MonoBehaviour:
   erosionRadius: 2
   spreadProbability: 0.7
   slopeBias: 0.6
+  transportToCenter: 0
+  depositionStrength: 0.5
+  depositionRadius: 0.3
   autoErode: 0
   stepInterval: 0.01
   maxAutoSteps: 10
-  showUnderwaterCells: 1
-  showErosionFront: 1
+  showUnderwaterCells: 0
+  showErosionFront: 0
 --- !u!114 &1462394442
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -568,6 +578,23 @@ MonoBehaviour:
   targetParticlesPerCell: 5
   minCellSize: 1
   maxCellSize: 20
-  drawSpatialGrid: 1
-  drawBounds: 1
-  drawTerrainBounds: 1
+  drawSpatialGrid: 0
+  drawBounds: 0
+  drawTerrainBounds: 0
+--- !u!114 &1462394444
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1462394437}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f868ef39aece3c54da1a9b10844a25f8, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  heightmapImporter: {fileID: 1462394439}
+  terrainErosion: {fileID: 1462394441}
+  waterLevel: {fileID: 0}
+  toggleKey: 9
+  showGUI: 1
