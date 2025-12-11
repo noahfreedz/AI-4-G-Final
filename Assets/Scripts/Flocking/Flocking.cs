@@ -209,11 +209,6 @@ public class Flocking : MonoBehaviour
     
         return steeringForce;        
     }
-
-    Vector3 SeperateFromWall(int boidIndex)
-    {
-        return Vector3.zero;
-    }
     
 
     Vector3 Seperation(int boidIndex)
@@ -296,7 +291,7 @@ public class Flocking : MonoBehaviour
             velocitySum += b.velocity;
         }
 
-        Vector3 averageVelocity = velocitySum / neighbors.Count;
+        Vector3 averageVelocity = velocitySum / neighbors.Count;    
         desiredVelocity = averageVelocity * k;
     
         return desiredVelocity;
@@ -334,6 +329,7 @@ public class Flocking : MonoBehaviour
         centerMass /= neighbors.Count;
         
         Vector3 forceToCenter = centerMass - boids[boidIndex].gameAgent.transform.position;
+        
         return forceToCenter;
     }
 
