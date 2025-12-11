@@ -599,7 +599,7 @@ MonoBehaviour:
   waterLevel: {fileID: 0}
   waveFunctionCollapse: {fileID: 1462394445}
   toggleKey: 9
-  showGUI: 1
+  showGUI: 0
 --- !u!114 &1462394445
 MonoBehaviour:
   m_ObjectHideFlags: 0
