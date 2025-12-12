@@ -95,11 +95,11 @@ public class TerrainRuntimeGUI : MonoBehaviour
     {
         if (heightmapImporter == null)
         {
-            GUILayout.Label("? RawHeightmapImporter not assigned!", EditorStyles.boldLabel);
+            GUILayout.Label("RawHeightmapImporter not assigned!", EditorStyles.boldLabel);
             return;
         }
 
-        GUILayout.Label("??? HEIGHTMAP GENERATION ???", EditorStyles.boldLabel);
+        GUILayout.Label("HEIGHTMAP GENERATION", EditorStyles.boldLabel);
         GUILayout.Space(5);
 
         // Generation mode toggle
@@ -221,8 +221,6 @@ public class TerrainRuntimeGUI : MonoBehaviour
     {
         if (heightmapImporter == null) return;
 
-        // Step 1: Apply base heightmap
-        heightmapImporter.ApplyHeightmap();
 
         // Step 2: Add random variation if strength > 0
         if (heightmapImporter.randomStrength > 0)
@@ -244,11 +242,11 @@ public class TerrainRuntimeGUI : MonoBehaviour
     {
         if (terrainErosion == null)
         {
-            GUILayout.Label("? TerrainErosion not assigned!", EditorStyles.boldLabel);
+            GUILayout.Label("TerrainErosion not assigned!", EditorStyles.boldLabel);
             return;
         }
 
-        GUILayout.Label("??? UNDERWATER EROSION ???", EditorStyles.boldLabel);
+        GUILayout.Label("UNDERWATER EROSION", EditorStyles.boldLabel);
         GUILayout.Space(5);
 
         // Erosion Strength
