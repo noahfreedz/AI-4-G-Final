@@ -5,24 +5,12 @@ using UnityEditor;
 
 public class RawHeightmapImporter : MonoBehaviour
 {
-    [System.Serializable]
-    public class HeightmapLayer
-    {
-        public DefaultAsset rawFile;
-        [Range(0f, 1f)]
-        public float blendAmount = 1f;
-    }
-
     [Header("Terrain")]
     public Terrain terrain;
 
     [Header("Generation Mode")]
     [Tooltip("Use Perlin noise for completely random terrain, or sample from heightmap files")]
     public bool useRandomGeneration = true;
-
-    [Header("Heightmap Layers")]
-    public List<HeightmapLayer> heightmapLayers = new List<HeightmapLayer>();
-    public int rawResolution = 512;
 
     [Header("Island Shaping")]
     [Tooltip("Enable island mode - pushes terrain down at edges using distance from center")]
@@ -86,82 +74,6 @@ public class RawHeightmapImporter : MonoBehaviour
     [Range(0f, 1f)]
     public float randomStrength = 0.3f;
 
-    public void ApplyHeightmap()
-    {
-#if UNITY_EDITOR
-        if (terrain == null)
-        {
-            Debug.LogError("Assign a Terrain first.");
-            return;
-        }
-
-        TerrainData terrainData = terrain.terrainData;
-        int terrainResolution = terrainData.heightmapResolution;
-
-        float[,] combined = new float[terrainResolution, terrainResolution];
-
-        if (useRandomGeneration)
-        {
-            // Pure random generation using Perlin noise
-            combined = GenerateRandomTerrain(terrainResolution);
-        }
-        else
-        {
-            // Sample from heightmap files
-            if (heightmapLayers.Count == 0)
-            {
-                Debug.LogError("No heightmap layers assigned. Enable 'Use Random Generation' or add heightmap layers.");
-                return;
-            }
-
-            float totalBlend = 0f;
-
-            foreach (var layer in heightmapLayers)
-            {
-                if (layer.rawFile == null || layer.blendAmount <= 0f) continue;
-
-                string path = AssetDatabase.GetAssetPath(layer.rawFile);
-                byte[] data = File.ReadAllBytes(path);
-                float[,] rawHeights = LoadRaw(data, rawResolution);
-
-                float[,] layerResult = ApplyHeightmapWithControls(rawHeights, terrainResolution);
-
-                for (int y = 0; y < terrainResolution; y++)
-                {
-                    for (int x = 0; x < terrainResolution; x++)
-                    {
-                        combined[y, x] += layerResult[y, x] * layer.blendAmount;
-                    }
-                }
-                totalBlend += layer.blendAmount;
-            }
-
-            if (totalBlend > 0)
-            {
-                for (int y = 0; y < terrainResolution; y++)
-                {
-                    for (int x = 0; x < terrainResolution; x++)
-                    {
-                        combined[y, x] /= totalBlend;
-                    }
-                }
-            }
-        }
-
-        if (smoothAmount > 0)
-        {
-            for (int i = 0; i < Mathf.RoundToInt(smoothAmount); i++)
-            {
-                SmoothHeightmap(combined);
-            }
-        }
-
-        terrainData.SetHeights(0, 0, combined);
-
-        string mode = useRandomGeneration ? "Random Perlin" : $"{heightmapLayers.Count} layers";
-        Debug.Log($"Heightmap applied - Mode: {mode}, Octaves: {octaves}");
-#endif
-    }
 
     public void ApplyRandomized()
     {
@@ -208,7 +120,6 @@ public class RawHeightmapImporter : MonoBehaviour
             return result;
         }
 
-        // Generate random offset for this terrain generation
         float offsetX = Random.Range(0f, 10000f);
         float offsetY = Random.Range(0f, 10000f);
 
@@ -286,7 +197,7 @@ public class RawHeightmapImporter : MonoBehaviour
         switch (distanceFunction)
         {
             case DistanceFunction.Euclidean:
-                return Mathf.Sqrt(nx * nx + ny * ny) * 2f; // *2 to normalize to 0-1 range at corners
+                return Mathf.Sqrt(nx * nx + ny * ny) * 2f;
 
             case DistanceFunction.EuclideanSquared:
                 return (nx * nx + ny * ny) * 2f;
@@ -420,30 +331,4 @@ public class RawHeightmapImporter : MonoBehaviour
         System.Array.Copy(temp, map, map.Length);
     }
 
-    float SampleBilinear(float[,] map, float x, float y)
-    {
-        int res = map.GetLength(0);
-
-        // Clamp to valid range
-        x = Mathf.Clamp(x, 0, res - 1.001f);
-        y = Mathf.Clamp(y, 0, res - 1.001f);
-
-        int x0 = (int)x;
-        int y0 = (int)y;
-        int x1 = Mathf.Min(x0 + 1, res - 1);
-        int y1 = Mathf.Min(y0 + 1, res - 1);
-
-        float fx = x - x0;
-        float fy = y - y0;
-
-        float h00 = map[y0, x0];
-        float h10 = map[y0, x1];
-        float h01 = map[y1, x0];
-        float h11 = map[y1, x1];
-
-        float h0 = Mathf.Lerp(h00, h10, fx);
-        float h1 = Mathf.Lerp(h01, h11, fx);
-
-        return Mathf.Lerp(h0, h1, fy);
-    }
 }

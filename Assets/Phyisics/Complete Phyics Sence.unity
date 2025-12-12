@@ -467,14 +467,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   terrain: {fileID: 510024115}
   useRandomGeneration: 1
-  heightmapLayers:
-  - rawFile: {fileID: 102900000, guid: 650c2156ba0f0044e9efa6f6f411ce98, type: 3}
-    blendAmount: 0.838
-  - rawFile: {fileID: 102900000, guid: 357a2cb2308d30b46946d9cab6f77471, type: 3}
-    blendAmount: 1
-  - rawFile: {fileID: 102900000, guid: ce6384f3e48ece94c9597a97e005ebc5, type: 3}
-    blendAmount: 0.876
-  rawResolution: 512
   useIslandMode: 0
   islandMix: 0.5
   distanceFunction: 4
@@ -596,8 +588,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   heightmapImporter: {fileID: 1462394439}
   terrainErosion: {fileID: 1462394441}
-  waterLevel: {fileID: 0}
   waveFunctionCollapse: {fileID: 1462394445}
+  terrainToMesh: {fileID: 510024120}
   toggleKey: 9
   showGUI: 0
 --- !u!114 &1462394445
