@@ -5,6 +5,7 @@ using System.IO;
 
 public class WaveFunctionCollapse : MonoBehaviour
 {
+    // direction enum for adjacency checks
     public enum DIRECTIONS
     {
         UP = 0,
@@ -13,8 +14,17 @@ public class WaveFunctionCollapse : MonoBehaviour
         LEFT
     }
 
+
+
+    // tile class holds pattern data and adjacencies
     public class Tile
     {
+        public int tile_index;
+        public int tile_hash;
+        public int frequency;
+        public Color[] tile_pixels;
+        public Dictionary<int, List<Tile>> adjacencies;
+
         public Tile(int hash, int index, Color[] pixels)
         {
             tile_hash = hash;
@@ -30,28 +40,36 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
-        public int tile_index;
-        int tile_hash;
-        int frequency;
-        public Color[] tile_pixels;
-        public Dictionary<int, List<Tile>> adjacencies;
-
-        public void addAdjacency(DIRECTIONS direction, Tile new_adjacency)
+        // add an adjacency in a direction if not alredy there
+        public void AddAdjacency(DIRECTIONS direction, Tile new_adjacency)
         {
-            if (!adjacencies[(int)direction].Contains(new_adjacency))
+            bool already_contains = adjacencies[(int)direction].Contains(new_adjacency);
+
+            if (already_contains == false)
             {
                 adjacencies[(int)direction].Add(new_adjacency);
             }
         }
 
-        public void incrementFrequency()
+        // increment the frequncy counter
+        public void IncrementFrequency()
         {
             frequency++;
         }
     }
 
+
+
+    // cell class for the wfc grid
     public class Cell
     {
+        public int x;
+        public int y;
+        public int cell_index;
+        public bool collapsed;
+        public Tile collapsed_tile;
+        public List<Tile> collapse_options;
+
         private WaveFunctionCollapse wfc;
 
         public Cell(int _x, int _y, int index, Dictionary<int, Tile> _hash_to_tile, WaveFunctionCollapse _wfc)
@@ -65,85 +83,96 @@ public class WaveFunctionCollapse : MonoBehaviour
             collapsed_tile = null;
 
             collapse_options = new List<Tile>();
+
             foreach (KeyValuePair<int, Tile> pair in _hash_to_tile)
             {
                 collapse_options.Add(pair.Value);
             }
         }
 
+        // fetch a neigbor cell in a direction
         public Cell FetchNeighbor(Dictionary<Vector2Int, Cell> position_to_cell, DIRECTIONS direction)
         {
             Vector2Int position = new Vector2Int(x, y);
 
-            switch (direction)
+            if (direction == DIRECTIONS.UP)
             {
-                case DIRECTIONS.UP:
-                    position.y -= 1;
-                    break;
-                case DIRECTIONS.DOWN:
-                    position.y += 1;
-                    break;
-                case DIRECTIONS.LEFT:
-                    position.x -= 1;
-                    break;
-                case DIRECTIONS.RIGHT:
-                    position.x += 1;
-                    break;
+                position.y -= 1;
+            }
+            else if (direction == DIRECTIONS.DOWN)
+            {
+                position.y += 1;
+            }
+            else if (direction == DIRECTIONS.LEFT)
+            {
+                position.x -= 1;
+            }
+            else if (direction == DIRECTIONS.RIGHT)
+            {
+                position.x += 1;
             }
 
             return position_to_cell[position];
         }
 
+        // reset the cell partialy for retry
         public void PartialResetCell(Dictionary<int, Tile> _hash_to_tile)
         {
             collapsed = false;
             collapsed_tile = null;
 
             collapse_options = new List<Tile>();
+
             foreach (KeyValuePair<int, Tile> pair in _hash_to_tile)
             {
                 collapse_options.Add(pair.Value);
             }
         }
-
-        public int x, y, cell_index;
-        public bool collapsed;
-        public Tile collapsed_tile;
-        public List<Tile> collapse_options;
     }
 
+
+
+    // cloud wfc setings
     [Header("Cloud WFC Settings")]
     [SerializeField] Texture2D cloud_bitmap;
     [SerializeField] int pattern_size = 3;
     [SerializeField] int grid_width = 20;
     [SerializeField] int grid_height = 20;
 
+    // cloud spawn setings
     [Header("Cloud Spawn Settings")]
     [SerializeField] GameObject cloud_prefab;
     [SerializeField] float cloud_height = 50f;
     [SerializeField] float cloud_spacing = 10f;
     [SerializeField] Vector3 spawn_origin = Vector3.zero;
 
+    // cloud apearance settings
     [Header("Cloud Appearance")]
     [SerializeField] Color cloud_color_threshold = new Color(0.8f, 0.8f, 0.8f);
     [SerializeField, Range(0f, 1f)] float spawn_threshold = 0.5f;
 
-    // Tile Variables
+
+
+    // tile variabels
     private Dictionary<int, Tile> hash_to_tile = new Dictionary<int, Tile>();
     private Dictionary<int, Tile> index_to_tile = new Dictionary<int, Tile>();
 
-    // Cell Variables
+    // cell variabels
     private List<Cell> cells = new List<Cell>();
     private Dictionary<Vector2Int, Cell> position_to_cell = new Dictionary<Vector2Int, Cell>();
     private Dictionary<int, Cell> index_to_cell = new Dictionary<int, Cell>();
 
-    // Spawned clouds
+    // spawned clouds list
     private List<GameObject> spawned_clouds = new List<GameObject>();
 
+    // wfc state variabels
     private int wfc_retry_count = 0;
     private bool wfc_complete = false;
 
+    // event for when wfc is  done
     public event Action OnWFCComplete;
+
+
 
     void Start()
     {
@@ -157,6 +186,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+
+
+    // start the cloud wfc process
     public void StartCloudWFC()
     {
         ClearClouds();
@@ -167,12 +199,16 @@ public class WaveFunctionCollapse : MonoBehaviour
         StepWFC();
     }
 
+    // start wfc with a specific bitamp
     public void StartCloudWFC(Texture2D bitmap)
     {
         cloud_bitmap = bitmap;
         StartCloudWFC();
     }
 
+
+
+    // clear all wfc data for restart
     private void ClearWFCData()
     {
         cells.Clear();
@@ -182,6 +218,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         index_to_tile.Clear();
     }
 
+
+
+    // clear all spawned cluods
     public void ClearClouds()
     {
         foreach (GameObject cloud in spawned_clouds)
@@ -191,15 +230,68 @@ public class WaveFunctionCollapse : MonoBehaviour
                 Destroy(cloud);
             }
         }
+
         spawned_clouds.Clear();
     }
 
+
+
+    // make a texture readable at runtime if its not alredy
+    private Texture2D GetReadableTexture(Texture2D source)
+    {
+        // try to read a pixel to check if readable
+        bool is_readable = true;
+
+        try
+        {
+            source.GetPixel(0, 0);
+        }
+        catch
+        {
+            is_readable = false;
+        }
+
+        if (is_readable)
+        {
+            return source;
+        }
+
+        // create a readable copy using render texure
+        RenderTexture tmp = RenderTexture.GetTemporary(
+            source.width,
+            source.height,
+            0,
+            RenderTextureFormat.Default,
+            RenderTextureReadWrite.Linear
+        );
+
+        Graphics.Blit(source, tmp);
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = tmp;
+
+        Texture2D readable = new Texture2D(source.width, source.height);
+        readable.ReadPixels(new Rect(0, 0, tmp.width, tmp.height), 0, 0);
+        readable.Apply();
+
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(tmp);
+
+        return readable;
+    }
+
+
+
+    // load the wfc conditions from the bitmap
     private void LoadWFCConditions(int p_size, Texture2D bitmap)
     {
         Debug.Log("Starting Cloud WFC Conditions");
 
+        // make sure texure is readable
+        bitmap = GetReadableTexture(bitmap);
+
         int next_tile_index = 0;
 
+        // extract all paterns from the bitmap
         for (int x = 0; x < bitmap.width; x++)
         {
             for (int y = 0; y < bitmap.height; y++)
@@ -207,7 +299,9 @@ public class WaveFunctionCollapse : MonoBehaviour
                 Color[] pattern = PullPattern(bitmap, p_size, new Vector2Int(x, y));
                 int p_hash = HashPixels(pattern);
 
-                if (!hash_to_tile.ContainsKey(p_hash))
+                bool hash_exists = hash_to_tile.ContainsKey(p_hash);
+
+                if (hash_exists == false)
                 {
                     Tile new_tile = new Tile(p_hash, next_tile_index, pattern);
                     index_to_tile[next_tile_index] = new_tile;
@@ -216,16 +310,18 @@ public class WaveFunctionCollapse : MonoBehaviour
                 }
                 else
                 {
-                    hash_to_tile[p_hash].incrementFrequency();
+                    hash_to_tile[p_hash].IncrementFrequency();
                 }
             }
         }
 
+        // generate adjacencies for all tiles
         foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
         {
             GenerateAdjacencies(bitmap, pair.Value, pattern_size);
         }
 
+        // create all the cells in the grid
         int cell_index = 0;
 
         for (int x = 0; x < grid_width; x++)
@@ -243,7 +339,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
-        // Collapse a random starting cell
+        // collapse a random starting cell
         int random_cell_index = UnityEngine.Random.Range(0, cells.Count);
         int tile_index = UnityEngine.Random.Range(0, next_tile_index);
 
@@ -252,12 +348,16 @@ public class WaveFunctionCollapse : MonoBehaviour
         ReduceEntropy(cells[random_cell_index]);
     }
 
+
+
+    // step the wfc algoritm forward one cell
     private void StepWFC()
     {
         int cell_index = -1;
         int lowest_entropy = 9999;
         int collapse_count = 0;
 
+        // find the cell with lowest entropy
         foreach (Cell cell in cells)
         {
             if (cell.collapsed == false)
@@ -279,6 +379,7 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
+        // check if we are done or need to retry
         if (cell_index == -1)
         {
             if (collapse_count >= cells.Count)
@@ -305,12 +406,14 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         Cell selected_cell = index_to_cell[cell_index];
 
+        // check for contradicion
         if (selected_cell.collapse_options.Count == 0)
         {
             Debug.LogError("Contradiction: Cell has no valid options!");
             return;
         }
 
+        // collapse the cell to a random valid option
         int selected_option_index = UnityEngine.Random.Range(0, selected_cell.collapse_options.Count);
         Tile tile_to_collapse_cell_to = selected_cell.collapse_options[selected_option_index];
         selected_cell.collapsed_tile = tile_to_collapse_cell_to;
@@ -320,31 +423,69 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         ReduceEntropy(selected_cell);
 
+        // continue stepping
         Invoke(nameof(StepWFC), 0.0001f);
     }
 
+
+
+    // called when wfc is finsihed
     private void OnWFCFinished()
     {
         wfc_complete = true;
         Debug.Log("WaveFunctionCollapse: Collapse complete, spawning clouds...");
         SpawnCloudsFromResult();
-        OnWFCComplete?.Invoke();
+
+        if (OnWFCComplete != null)
+        {
+            OnWFCComplete.Invoke();
+        }
     }
 
+
+
+    // spawn cloud prefabs based on the wfc result
     private void SpawnCloudsFromResult()
     {
         int center_index = (pattern_size * pattern_size) / 2;
 
+        int collapsed_count = 0;
+        int above_threshold_count = 0;
+        float min_brightness = 1f;
+        float max_brightness = 0f;
+
         foreach (Cell cell in cells)
         {
-            if (!cell.collapsed || cell.collapsed_tile == null) continue;
+            if (cell.collapsed == false)
+            {
+                continue;
+            }
+
+            if (cell.collapsed_tile == null)
+            {
+                continue;
+            }
+
+            collapsed_count++;
 
             Color center_color = cell.collapsed_tile.tile_pixels[center_index];
             float brightness = (center_color.r + center_color.g + center_color.b) / 3f;
 
-            // Spawn cloud if pixel is bright enough (cloud-like)
+            if (brightness < min_brightness)
+            {
+                min_brightness = brightness;
+            }
+
+            if (brightness > max_brightness)
+            {
+                max_brightness = brightness;
+            }
+
+            // spawn cloud if pixel is bright enugh
             if (brightness >= spawn_threshold)
             {
+                above_threshold_count++;
+
                 Vector3 spawn_pos = spawn_origin + new Vector3(
                     cell.x * cloud_spacing,
                     cloud_height,
@@ -353,8 +494,9 @@ public class WaveFunctionCollapse : MonoBehaviour
 
                 GameObject cloud = Instantiate(cloud_prefab, spawn_pos, Quaternion.identity, transform);
 
-                // Set cloud color based on bitmap
+                // set cloud color based on bitmap
                 CloudTile cloud_tile = cloud.GetComponent<CloudTile>();
+
                 if (cloud_tile != null)
                 {
                     cloud_tile.SetCloudColor(center_color);
@@ -365,9 +507,13 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
+        Debug.Log($"WaveFunctionCollapse: Collapsed cells: {collapsed_count}, Brightness range: {min_brightness:F3} to {max_brightness:F3}, Above threshold ({spawn_threshold}): {above_threshold_count}");
         Debug.Log($"WaveFunctionCollapse: Spawned {spawned_clouds.Count} clouds");
     }
 
+
+
+    // reduce entropy of neighboring cells using constraint propogation
     private void ReduceEntropy(Cell start_cell)
     {
         Queue<Cell> cells_to_process = new Queue<Cell>();
@@ -381,18 +527,31 @@ public class WaveFunctionCollapse : MonoBehaviour
             Cell current = cells_to_process.Dequeue();
             cells_in_queue.Remove(current.cell_index);
 
+            // check all four dirrections
             foreach (DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
             {
                 Vector2Int neighbor_position = new Vector2Int(current.x, current.y);
-                switch (direction)
+
+                if (direction == DIRECTIONS.UP)
                 {
-                    case DIRECTIONS.UP: neighbor_position.y -= 1; break;
-                    case DIRECTIONS.DOWN: neighbor_position.y += 1; break;
-                    case DIRECTIONS.LEFT: neighbor_position.x -= 1; break;
-                    case DIRECTIONS.RIGHT: neighbor_position.x += 1; break;
+                    neighbor_position.y -= 1;
+                }
+                else if (direction == DIRECTIONS.DOWN)
+                {
+                    neighbor_position.y += 1;
+                }
+                else if (direction == DIRECTIONS.LEFT)
+                {
+                    neighbor_position.x -= 1;
+                }
+                else if (direction == DIRECTIONS.RIGHT)
+                {
+                    neighbor_position.x += 1;
                 }
 
-                if (!position_to_cell.ContainsKey(neighbor_position))
+                bool has_neighbor = position_to_cell.ContainsKey(neighbor_position);
+
+                if (has_neighbor == false)
                 {
                     continue;
                 }
@@ -404,6 +563,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                     continue;
                 }
 
+                // build set of valid tiles for neighbor
                 HashSet<Tile> valid_tiles = new HashSet<Tile>();
 
                 if (current.collapsed)
@@ -426,11 +586,15 @@ public class WaveFunctionCollapse : MonoBehaviour
 
                 int old_collapse_count = neighbor.collapse_options.Count;
 
-                neighbor.collapse_options.RemoveAll(tile => !valid_tiles.Contains(tile));
+                // remove invalid options from neigbor
+                neighbor.collapse_options.RemoveAll(tile => valid_tiles.Contains(tile) == false);
 
+                // if entropy changed add neigbor to queue
                 if (neighbor.collapse_options.Count < old_collapse_count)
                 {
-                    if (!cells_in_queue.Contains(neighbor.cell_index))
+                    bool already_in_queue = cells_in_queue.Contains(neighbor.cell_index);
+
+                    if (already_in_queue == false)
                     {
                         cells_to_process.Enqueue(neighbor);
                         cells_in_queue.Add(neighbor.cell_index);
@@ -440,19 +604,30 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
+
+
+    // generate adjacency rules for a tile
     private void GenerateAdjacencies(Texture2D bitmap, Tile tile, int pattern_size)
     {
         foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
         {
             Tile other = pair.Value;
 
+            // check up adjacency
             bool up_valid = true;
-            for (int y = 0; y < pattern_size - 1 && up_valid; y++)
+
+            for (int y = 0; y < pattern_size - 1; y++)
             {
+                if (up_valid == false)
+                {
+                    break;
+                }
+
                 for (int x = 0; x < pattern_size; x++)
                 {
                     int tile_index = y * pattern_size + x;
                     int other_index = (y + 1) * pattern_size + x;
+
                     if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
                     {
                         up_valid = false;
@@ -460,15 +635,27 @@ public class WaveFunctionCollapse : MonoBehaviour
                     }
                 }
             }
-            if (up_valid) tile.addAdjacency(DIRECTIONS.UP, other);
 
-            bool down_valid = true;
-            for (int y = 0; y < pattern_size - 1 && down_valid; y++)
+            if (up_valid)
             {
+                tile.AddAdjacency(DIRECTIONS.UP, other);
+            }
+
+            // check down adjacency
+            bool down_valid = true;
+
+            for (int y = 0; y < pattern_size - 1; y++)
+            {
+                if (down_valid == false)
+                {
+                    break;
+                }
+
                 for (int x = 0; x < pattern_size; x++)
                 {
                     int tile_index = (y + 1) * pattern_size + x;
                     int other_index = y * pattern_size + x;
+
                     if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
                     {
                         down_valid = false;
@@ -476,15 +663,27 @@ public class WaveFunctionCollapse : MonoBehaviour
                     }
                 }
             }
-            if (down_valid) tile.addAdjacency(DIRECTIONS.DOWN, other);
 
-            bool left_valid = true;
-            for (int x = 0; x < pattern_size - 1 && left_valid; x++)
+            if (down_valid)
             {
+                tile.AddAdjacency(DIRECTIONS.DOWN, other);
+            }
+
+            // check left adjacency
+            bool left_valid = true;
+
+            for (int x = 0; x < pattern_size - 1; x++)
+            {
+                if (left_valid == false)
+                {
+                    break;
+                }
+
                 for (int y = 0; y < pattern_size; y++)
                 {
                     int tile_index = y * pattern_size + x;
                     int other_index = y * pattern_size + (x + 1);
+
                     if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
                     {
                         left_valid = false;
@@ -492,15 +691,27 @@ public class WaveFunctionCollapse : MonoBehaviour
                     }
                 }
             }
-            if (left_valid) tile.addAdjacency(DIRECTIONS.LEFT, other);
 
-            bool right_valid = true;
-            for (int x = 0; x < pattern_size - 1 && right_valid; x++)
+            if (left_valid)
             {
+                tile.AddAdjacency(DIRECTIONS.LEFT, other);
+            }
+
+            // check right adjacency
+            bool right_valid = true;
+
+            for (int x = 0; x < pattern_size - 1; x++)
+            {
+                if (right_valid == false)
+                {
+                    break;
+                }
+
                 for (int y = 0; y < pattern_size; y++)
                 {
                     int tile_index = y * pattern_size + (x + 1);
                     int other_index = y * pattern_size + x;
+
                     if (tile.tile_pixels[tile_index] != other.tile_pixels[other_index])
                     {
                         right_valid = false;
@@ -508,10 +719,17 @@ public class WaveFunctionCollapse : MonoBehaviour
                     }
                 }
             }
-            if (right_valid) tile.addAdjacency(DIRECTIONS.RIGHT, other);
+
+            if (right_valid)
+            {
+                tile.AddAdjacency(DIRECTIONS.RIGHT, other);
+            }
         }
     }
 
+
+
+    // restart the wfc from scratch
     private void RestartWFC()
     {
         CancelInvoke(nameof(StepWFC));
@@ -530,11 +748,15 @@ public class WaveFunctionCollapse : MonoBehaviour
         StepWFC();
     }
 
+
+
+    // pull a pattern from the texture at a corner postion
     private Color[] PullPattern(Texture2D texture, int pattern_size, Vector2Int corner)
     {
         Color[] pattern = new Color[pattern_size * pattern_size];
 
         int pattern_index = 0;
+
         for (int y = 0; y < pattern_size; y++)
         {
             for (int x = 0; x < pattern_size; x++)
@@ -550,6 +772,9 @@ public class WaveFunctionCollapse : MonoBehaviour
         return pattern;
     }
 
+
+
+    // hash an array of pixles into a single int
     private int HashPixels(Color[] pixels)
     {
         unchecked
@@ -572,7 +797,17 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
-    // Public accessors
-    public bool IsComplete => wfc_complete;
-    public List<GameObject> GetSpawnedClouds() => spawned_clouds;
+
+
+    // public acessors
+
+    public bool GetIsComplete()
+    {
+        return wfc_complete;
+    }
+
+    public List<GameObject> GetSpawnedClouds()
+    {
+        return spawned_clouds;
+    }
 }

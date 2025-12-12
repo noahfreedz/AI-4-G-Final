@@ -3,6 +3,7 @@ using UnityEngine;
 
 public class TerrainHeightMapper : MonoBehaviour
 {
+    // height color stop class for terrain zones
     [System.Serializable]
     public class HeightColorStop
     {
@@ -10,6 +11,7 @@ public class TerrainHeightMapper : MonoBehaviour
         public float height;
         public Color color;
 
+        // physics propertes for this terrain type
         [Header("Physics Properties")]
         [Range(0f, 1f)]
         public float restitution = 0.5f;
@@ -22,10 +24,14 @@ public class TerrainHeightMapper : MonoBehaviour
         public float water_density = 1.0f;
     }
 
+
+
+    // terrain settings
     [Header("Terrain Settings")]
     [SerializeField] public Terrain target_terrain;
     [SerializeField] float cells_per_terrain_unit = 1;
 
+    // height color setings for the different terrain zones
     [Header("Height Color Settings")]
     [SerializeField]
     public List<HeightColorStop> height_colors = new List<HeightColorStop>()
@@ -102,10 +108,14 @@ public class TerrainHeightMapper : MonoBehaviour
         }
     };
 
-    // Terrain Painting
+
+
+    // terrain painting variabels
     private Texture2D terrain_texture;
-    public int texture_width { get; private set; }
-    public int texture_height { get; private set; }
+    public int texture_width;
+    public int texture_height;
+
+
 
     void Start()
     {
@@ -117,6 +127,8 @@ public class TerrainHeightMapper : MonoBehaviour
         }
     }
 
+
+
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.R))
@@ -125,6 +137,9 @@ public class TerrainHeightMapper : MonoBehaviour
         }
     }
 
+
+
+    // initalize the terrain texture for painting
     public void InitializeTerrainTexture()
     {
         TerrainData terrain_data = target_terrain.terrainData;
@@ -143,12 +158,16 @@ public class TerrainHeightMapper : MonoBehaviour
         {
             pixels[i] = default_color;
         }
+
         terrain_texture.SetPixels(pixels);
         terrain_texture.Apply();
 
         ApplyTextureToTerrain();
     }
 
+
+
+    // apply the texture to the terrain as a new layer
     private void ApplyTextureToTerrain()
     {
         TerrainData terrain_data = target_terrain.terrainData;
@@ -182,9 +201,15 @@ public class TerrainHeightMapper : MonoBehaviour
         terrain_data.SetAlphamaps(0, 0, alphamaps);
     }
 
+
+
+    // debug log the terrain height  range
     public void DebugTerrainHeights()
     {
-        if (target_terrain == null) return;
+        if (target_terrain == null)
+        {
+            return;
+        }
 
         float min_height = 1f;
         float max_height = 0f;
@@ -194,17 +219,31 @@ public class TerrainHeightMapper : MonoBehaviour
             for (int x = 0; x < texture_width; x++)
             {
                 float height = GetTerrainHeightAtCell(x, y);
-                if (height < min_height) min_height = height;
-                if (height > max_height) max_height = height;
+
+                if (height < min_height)
+                {
+                    min_height = height;
+                }
+
+                if (height > max_height)
+                {
+                    max_height = height;
+                }
             }
         }
 
         Debug.Log($"Terrain height range: {min_height} to {max_height}");
     }
 
+
+
+    // get the terrain height at a specific  cell position
     public float GetTerrainHeightAtCell(int cell_x, int cell_y)
     {
-        if (target_terrain == null) return 0f;
+        if (target_terrain == null)
+        {
+            return 0f;
+        }
 
         TerrainData terrain_data = target_terrain.terrainData;
 
@@ -216,9 +255,15 @@ public class TerrainHeightMapper : MonoBehaviour
         return height;
     }
 
+
+
+    // get the terrain hieght at a world position
     public float GetTerrainHeightAtPosition(Vector3 world_position)
     {
-        if (target_terrain == null) return 0f;
+        if (target_terrain == null)
+        {
+            return 0f;
+        }
 
         TerrainData terrain_data = target_terrain.terrainData;
         Vector3 terrain_position = target_terrain.transform.position;
@@ -234,9 +279,15 @@ public class TerrainHeightMapper : MonoBehaviour
         return height;
     }
 
+
+
+    // get average terrain height at cell with multiple samples
     public float GetAverageTerrainHeightAtCell(int cell_x, int cell_y, int samples_per_axis = 3)
     {
-        if (target_terrain == null) return 0f;
+        if (target_terrain == null)
+        {
+            return 0f;
+        }
 
         TerrainData terrain_data = target_terrain.terrainData;
 
@@ -267,9 +318,17 @@ public class TerrainHeightMapper : MonoBehaviour
         return (total_height / sample_count) / terrain_data.size.y;
     }
 
+
+
+    // get the color for a given normalized height value
     public Color GetColorForHeight(float normalized_height)
     {
-        if (height_colors == null || height_colors.Count == 0)
+        if (height_colors == null)
+        {
+            return Color.magenta;
+        }
+
+        if (height_colors.Count == 0)
         {
             return Color.magenta;
         }
@@ -279,12 +338,15 @@ public class TerrainHeightMapper : MonoBehaviour
             return height_colors[0].color;
         }
 
+        // loop thru height stops to find the right color
         for (int i = 0; i < height_colors.Count - 1; i++)
         {
             HeightColorStop current = height_colors[i];
             HeightColorStop next = height_colors[i + 1];
 
-            if (normalized_height >= current.height && normalized_height <= next.height)
+            bool in_range = normalized_height >= current.height && normalized_height <= next.height;
+
+            if (in_range)
             {
                 float range = next.height - current.height;
                 float t = (normalized_height - current.height) / range;
@@ -293,17 +355,27 @@ public class TerrainHeightMapper : MonoBehaviour
             }
         }
 
+        // check if below first stop
         if (normalized_height < height_colors[0].height)
         {
             return height_colors[0].color;
         }
 
+        // return last color if above all  stops
         return height_colors[height_colors.Count - 1].color;
     }
 
+
+
+    // get the properteis for a given height
     public HeightColorStop GetPropertiesForHeight(float normalized_height)
     {
-        if (height_colors == null || height_colors.Count == 0)
+        if (height_colors == null)
+        {
+            return new HeightColorStop();
+        }
+
+        if (height_colors.Count == 0)
         {
             return new HeightColorStop();
         }
@@ -313,34 +385,53 @@ public class TerrainHeightMapper : MonoBehaviour
             return height_colors[0];
         }
 
+        // loop thru to find the right propertie stop
         for (int i = 0; i < height_colors.Count - 1; i++)
         {
             HeightColorStop current = height_colors[i];
             HeightColorStop next = height_colors[i + 1];
 
-            if (normalized_height >= current.height && normalized_height < next.height)
+            bool in_range = normalized_height >= current.height && normalized_height < next.height;
+
+            if (in_range)
             {
                 return current;
             }
         }
 
+        // check if below first stop
         if (normalized_height < height_colors[0].height)
         {
             return height_colors[0];
         }
 
+        // return last if above all stops
         return height_colors[height_colors.Count - 1];
     }
 
+
+
+    // get terrain properties at a world postion
     public HeightColorStop GetTerrainPropertiesAtPosition(Vector3 world_position)
     {
         float height = GetTerrainHeightAtPosition(world_position);
         return GetPropertiesForHeight(height);
     }
 
+
+
+    // paint the entire terrain by height
     public void PaintTerrainByHeight()
     {
-        if (terrain_texture == null || target_terrain == null) return;
+        if (terrain_texture == null)
+        {
+            return;
+        }
+
+        if (target_terrain == null)
+        {
+            return;
+        }
 
         Color[] pixels = new Color[texture_width * texture_height];
 
@@ -360,17 +451,29 @@ public class TerrainHeightMapper : MonoBehaviour
         Debug.Log("Painted terrain by height");
     }
 
+
+
+    // refresh all terrain colors
     public void RefreshTerrainColors()
     {
-        if (target_terrain == null) return;
+        if (target_terrain == null)
+        {
+            return;
+        }
 
         InitializeTerrainTexture();
         PaintTerrainByHeight();
     }
 
+
+
+    // paint a single cell on the terrain
     public void PaintTerrainAtCell(int cell_x, int cell_y, Color color)
     {
-        if (terrain_texture == null) return;
+        if (terrain_texture == null)
+        {
+            return;
+        }
 
         int tex_x = Mathf.Clamp(cell_x, 0, texture_width - 1);
         int tex_y = Mathf.Clamp(cell_y, 0, texture_height - 1);
@@ -379,18 +482,35 @@ public class TerrainHeightMapper : MonoBehaviour
         terrain_texture.Apply();
     }
 
+
+
+    // paint a cell by its height value
     public void PaintTerrainAtCellByHeight(int cell_x, int cell_y)
     {
-        if (terrain_texture == null) return;
+        if (terrain_texture == null)
+        {
+            return;
+        }
 
         float height = GetTerrainHeightAtCell(cell_x, cell_y);
         Color color = GetColorForHeight(height);
         PaintTerrainAtCell(cell_x, cell_y, color);
     }
 
+
+
+    // paint multiple cells at once for  performance
     public void PaintTerrainAtCells(List<Vector2Int> cell_positions, List<Color> colors)
     {
-        if (terrain_texture == null || cell_positions.Count != colors.Count) return;
+        if (terrain_texture == null)
+        {
+            return;
+        }
+
+        if (cell_positions.Count != colors.Count)
+        {
+            return;
+        }
 
         for (int i = 0; i < cell_positions.Count; i++)
         {
@@ -402,6 +522,9 @@ public class TerrainHeightMapper : MonoBehaviour
         terrain_texture.Apply();
     }
 
+
+
+    // set the target terrian and initalize
     public void SetTargetTerrain(Terrain terrain)
     {
         target_terrain = terrain;
