@@ -63,7 +63,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10303, guid: 0000000000000000f000000000000000, type: 0}
+  - {fileID: 2100000, guid: 9c801bd3d2ab03e4eb38d5e6e70b6688, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -167,7 +167,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waterSettings: {fileID: 0}
-  wfc: {fileID: 0}
+  thm: {fileID: 0}
   enableTerrainCollision: 1
   enableSphereCollision: 1
   restitution: 0.5

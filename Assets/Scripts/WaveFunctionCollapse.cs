@@ -340,24 +340,29 @@ public class WaveFunctionCollapse : MonoBehaviour
             if (!cell.collapsed || cell.collapsed_tile == null) continue;
 
             Color center_color = cell.collapsed_tile.tile_pixels[center_index];
+            float brightness = (center_color.r + center_color.g + center_color.b) / 3f;
 
-            Vector3 spawn_pos = spawn_origin + new Vector3(
-                cell.x * cloud_spacing,
-                cloud_height,
-                cell.y * cloud_spacing
-            );
-
-            GameObject cloud = Instantiate(cloud_prefab, spawn_pos, Quaternion.identity, transform);
-
-            // Set cloud color based on bitmap
-            CloudTile cloud_tile = cloud.GetComponent<CloudTile>();
-            if (cloud_tile != null)
+            // Spawn cloud if pixel is bright enough (cloud-like)
+            if (brightness >= spawn_threshold)
             {
-                cloud_tile.SetCloudColor(center_color);
-                cloud_tile.SetGridPosition(cell.x, cell.y);
-            }
+                Vector3 spawn_pos = spawn_origin + new Vector3(
+                    cell.x * cloud_spacing,
+                    cloud_height,
+                    cell.y * cloud_spacing
+                );
 
-            spawned_clouds.Add(cloud);
+                GameObject cloud = Instantiate(cloud_prefab, spawn_pos, Quaternion.identity, transform);
+
+                // Set cloud color based on bitmap
+                CloudTile cloud_tile = cloud.GetComponent<CloudTile>();
+                if (cloud_tile != null)
+                {
+                    cloud_tile.SetCloudColor(center_color);
+                    cloud_tile.SetGridPosition(cell.x, cell.y);
+                }
+
+                spawned_clouds.Add(cloud);
+            }
         }
 
         Debug.Log($"WaveFunctionCollapse: Spawned {spawned_clouds.Count} clouds");

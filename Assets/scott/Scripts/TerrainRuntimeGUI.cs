@@ -5,7 +5,7 @@ public class TerrainRuntimeGUI : MonoBehaviour
     [Header("References")]
     public RawHeightmapImporter heightmapImporter;
     public TerrainErosion terrainErosion;
-    public WaveFunctionCollapse waveFunctionCollapse;
+    public TerrainHeightMapper thm;
     public TerrainToMesh terrainToMesh;
 
     [Header("GUI Settings")]
@@ -209,9 +209,9 @@ public class TerrainRuntimeGUI : MonoBehaviour
             terrainErosion.RefreshTerrainData();
         }
 
-        if (waveFunctionCollapse != null)
+        if (thm != null)
         {
-            waveFunctionCollapse.RefreshTerrainColors();
+            thm.RefreshTerrainColors();
         }
 
         if (terrainToMesh != null)
