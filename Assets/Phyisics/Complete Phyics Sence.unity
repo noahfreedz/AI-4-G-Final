@@ -38,7 +38,7 @@ RenderSettings:
   m_ReflectionIntensity: 1
   m_CustomReflection: {fileID: 0}
   m_Sun: {fileID: 0}
-  m_IndirectSpecularColor: {r: 0.44657898, g: 0.4964133, b: 0.5748178, a: 1}
+  m_IndirectSpecularColor: {r: 0.4465781, g: 0.49641192, b: 0.574816, a: 1}
   m_UseRadianceAmbientProbe: 0
 --- !u!157 &3
 LightmapSettings:
@@ -688,3 +688,57 @@ MonoBehaviour:
   spawn_origin: {x: -100, y: 0, z: -30}
   cloud_color_threshold: {r: 0.87058824, g: 0.8784314, b: 0.8862745, a: 1}
   spawn_threshold: 0.5
+--- !u!1 &1512758584
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1512758586}
+  - component: {fileID: 1512758585}
+  m_Layer: 0
+  m_Name: Flocking
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1512758585
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1512758584}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17951fe6b8f7ac47af3176034eaf46a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  numBoids: 200
+  boidPrefab: {fileID: 4588415584897003637, guid: f2db16c1c4ab3e945b3397b35bd324dd, type: 3}
+  eaglePrefab: {fileID: 4056078868076855683, guid: 525e1177df8314749b48c5a39cfa84c1, type: 3}
+  areaOfEffect: {x: 500, y: 50, z: 500}
+  boundingBoxCenter: {x: 500, y: 500, z: 500}
+  cohesionRadius: 10
+  separationRadius: 10
+  alignmentRadius: 20
+  k: 1
+  eagleRadius: 5
+--- !u!4 &1512758586
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1512758584}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 4
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
