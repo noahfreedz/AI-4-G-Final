@@ -123,6 +123,60 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &68587976
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 68587978}
+  - component: {fileID: 68587977}
+  m_Layer: 0
+  m_Name: GameManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &68587977
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 68587976}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17951fe6b8f7ac47af3176034eaf46a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  numBoids: 200
+  boidPrefab: {fileID: 4588415584897003637, guid: f2db16c1c4ab3e945b3397b35bd324dd, type: 3}
+  eaglePrefab: {fileID: 4056078868076855683, guid: 525e1177df8314749b48c5a39cfa84c1, type: 3}
+  areaOfEffect: {x: 500, y: 50, z: 500}
+  boundingBoxCenter: {x: 500, y: 500, z: 500}
+  cohesionRadius: 10
+  separationRadius: 10
+  alignmentRadius: 20
+  k: 1
+  eagleRadius: 5
+--- !u!4 &68587978
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 68587976}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_RootOrder: 4
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &510024113
 GameObject:
   m_ObjectHideFlags: 0
@@ -463,6 +517,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   terrain: {fileID: 510024115}
+  useRandomGeneration: 1
   heightmapLayers:
   - rawFile: {fileID: 102900000, guid: 650c2156ba0f0044e9efa6f6f411ce98, type: 3}
     blendAmount: 0.476
@@ -471,6 +526,11 @@ MonoBehaviour:
   - rawFile: {fileID: 102900000, guid: ce6384f3e48ece94c9597a97e005ebc5, type: 3}
     blendAmount: 0.4
   rawResolution: 512
+  useIslandMode: 0
+  islandMix: 0.5
+  distanceFunction: 0
+  islandScale: 1
+  distanceExponent: 2
   octaves: 3
   baseFrequency: 4
   lacunarity: 2.78
@@ -516,6 +576,9 @@ MonoBehaviour:
   erosionRadius: 2
   spreadProbability: 0.7
   slopeBias: 0.6
+  transportToCenter: 0
+  depositionStrength: 0.5
+  depositionRadius: 0.3
   autoErode: 0
   stepInterval: 0.01
   maxAutoSteps: 10
