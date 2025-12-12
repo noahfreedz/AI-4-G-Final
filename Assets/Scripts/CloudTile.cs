@@ -21,7 +21,7 @@ public class CloudTile : MonoBehaviour
     [Header("Spawning Settings")]
     [SerializeField] GameObject spawn_prefab;
     [SerializeField] float spawn_radius = 5f;
-    [SerializeField] float spawn_cooldown = 30f;
+    float spawn_cooldown = 40f;
     [SerializeField] float spawn_height_offset = 0f;
     [SerializeField] bool spawn_at_ground = true;
     [SerializeField] LayerMask ground_layer = ~0;
