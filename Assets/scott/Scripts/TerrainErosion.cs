@@ -325,7 +325,6 @@ public class TerrainErosion : MonoBehaviour
 
                 if (flowTowardDeepest && neighborBuffer.Count > 0)
                 {
-                    // Simple insertion sort for small lists (faster than full sort)
                     for (int j = 1; j < neighborBuffer.Count; j++)
                     {
                         Vector2Int key = neighborBuffer[j];
