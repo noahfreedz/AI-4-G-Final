@@ -221,8 +221,6 @@ public class TerrainRuntimeGUI : MonoBehaviour
     {
         if (heightmapImporter == null) return;
 
-        // Step 1: Apply base heightmap
-        heightmapImporter.ApplyHeightmap();
 
         // Step 2: Add random variation if strength > 0
         if (heightmapImporter.randomStrength > 0)
