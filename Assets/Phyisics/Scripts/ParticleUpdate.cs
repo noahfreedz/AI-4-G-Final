@@ -8,7 +8,7 @@ public class ParticleUpdate : MonoBehaviour
     [SerializeField] private WaterSettings waterSettings;
 
     [Header("Terrain Settings")]
-    [SerializeField] private WaveFunctionCollapse wfc;
+    [SerializeField] private TerrainHeightMapper thm;
 
     [Header("Collision Settings")]
     [SerializeField] private bool enableTerrainCollision = true;
@@ -53,7 +53,7 @@ public class ParticleUpdate : MonoBehaviour
     private bool hasCollided = false;
 
     // Current terrain properties
-    private WaveFunctionCollapse.HeightColorStop currentTerrainProperties;
+    private TerrainHeightMapper.HeightColorStop currentTerrainProperties;
     private float terrainDrag = 0f;
     private bool onTerrainWater = false;
 
@@ -67,19 +67,11 @@ public class ParticleUpdate : MonoBehaviour
         if (waterSettings == null)
         {
             waterSettings = FindObjectOfType<WaterSettings>();
-            if (waterSettings == null)
-            {
-                Debug.LogWarning($"ParticleUpdate on {gameObject.name}: No WaterSettings found in scene!");
-            }
         }
 
-        if (wfc == null)
+        if (thm == null)
         {
-            wfc = FindObjectOfType<WaveFunctionCollapse>();
-            if (wfc == null)
-            {
-                Debug.LogWarning($"ParticleUpdate on {gameObject.name}: No WaveFunctionCollapse found in scene!");
-            }
+            thm = FindObjectOfType<TerrainHeightMapper>();
         }
 
         if (enableTerrainCollision || enableSphereCollision)
@@ -207,9 +199,9 @@ public class ParticleUpdate : MonoBehaviour
 
     void UpdateTerrainProperties()
     {
-        if (wfc == null) return;
+        if (thm == null) return;
 
-        currentTerrainProperties = wfc.GetTerrainPropertiesAtPosition(position);
+        currentTerrainProperties = thm.GetTerrainPropertiesAtPosition(position);
 
         if (currentTerrainProperties != null)
         {
@@ -237,10 +229,10 @@ public class ParticleUpdate : MonoBehaviour
 
         // Get terrain height at current position
         float terrainHeight = 0f;
-        if (wfc != null && wfc.target_terrain != null)
+        if (thm != null && thm.target_terrain != null)
         {
-            Vector3 terrainPos = wfc.target_terrain.transform.position;
-            terrainHeight = wfc.target_terrain.SampleHeight(position) + terrainPos.y;
+            Vector3 terrainPos = thm.target_terrain.transform.position;
+            terrainHeight = thm.target_terrain.SampleHeight(position) + terrainPos.y;
         }
 
         // Estimate water surface height (terrain height + small offset for shallow water)
@@ -444,7 +436,7 @@ public class ParticleUpdate : MonoBehaviour
     public RigidBody GetRigidBody() { return rigidBody; }
     public bool IsMarkedForDestruction() { return destructionTimerStarted; }
     public float GetDestructionTimeRemaining() { return Mathf.Max(0, destructionDelay - destructionTimer); }
-    public WaveFunctionCollapse.HeightColorStop GetCurrentTerrainProperties() { return currentTerrainProperties; }
+    public TerrainHeightMapper.HeightColorStop GetCurrentTerrainProperties() { return currentTerrainProperties; }
 
     void OnDrawGizmos()
     {

@@ -1,7 +1,5 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using UnityEngine;
 using System.IO;
 
@@ -73,14 +71,6 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
-        public void UpdateCell(Color cell_color)
-        {
-            if (wfc.target_terrain != null)
-            {
-                wfc.PaintTerrainAtCell(x, y, cell_color);
-            }
-        }
-
         public Cell FetchNeighbor(Dictionary<Vector2Int, Cell> position_to_cell, DIRECTIONS direction)
         {
             Vector2Int position = new Vector2Int(x, y);
@@ -108,7 +98,6 @@ public class WaveFunctionCollapse : MonoBehaviour
         {
             collapsed = false;
             collapsed_tile = null;
-            UpdateCell(new Color(0.236f, 0.191f, 0.191f, 1.000f));
 
             collapse_options = new List<Tile>();
             foreach (KeyValuePair<int, Tile> pair in _hash_to_tile)
@@ -119,129 +108,27 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         public int x, y, cell_index;
         public bool collapsed;
-        public Tile? collapsed_tile;
+        public Tile collapsed_tile;
         public List<Tile> collapse_options;
     }
 
-    [System.Serializable]
-    public class HeightColorStop
-    {
-        public string name;
-        public float height;
-        public Color color;
+    [Header("Cloud WFC Settings")]
+    [SerializeField] Texture2D cloud_bitmap;
+    [SerializeField] int pattern_size = 3;
+    [SerializeField] int grid_width = 20;
+    [SerializeField] int grid_height = 20;
 
-        [Header("Physics Properties")]
-        [Range(0f, 1f)]
-        public float restitution = 0.5f;
-        [Range(0f, 1f)]
-        public float friction = 0.5f;
-        [Range(0f, 1f)]
-        public float drag = 0.0f;
-        public bool is_water = false;
-        [Range(0f, 2f)]
-        public float water_density = 1.0f;
-    }
+    [Header("Cloud Spawn Settings")]
+    [SerializeField] GameObject cloud_prefab;
+    [SerializeField] float cloud_height = 50f;
+    [SerializeField] float cloud_spacing = 10f;
+    [SerializeField] Vector3 spawn_origin = Vector3.zero;
 
-    Vector2Int grid_start = new Vector2Int(0, 0);
-    [SerializeField] int player_radius;
-
-    [Header("Terrain Settings")]
-    [SerializeField] public Terrain target_terrain;
-    [SerializeField] float cells_per_terrain_unit = 1;
-
-    [Header("Height Color Settings")]
-    [SerializeField]
-    public List<HeightColorStop> height_colors = new List<HeightColorStop>()
-    {
-        new HeightColorStop {
-            name = "Deep Water",
-            height = 0.01f,
-            color = new Color(0.0f, 0.2f, 0.5f),
-            restitution = 0.1f,
-            friction = 0.2f,
-            drag = 0.8f,
-            is_water = true,
-            water_density = 1.0f
-        },
-        new HeightColorStop {
-            name = "Shallow Water",
-            height = 0.04f,
-            color = new Color(0.0f, 0.4f, 0.8f),
-            restitution = 0.2f,
-            friction = 0.3f,
-            drag = 0.5f,
-            is_water = true,
-            water_density = 0.8f
-        },
-        new HeightColorStop {
-            name = "Sand",
-            height = 0.06f,
-            color = new Color(0.9f, 0.85f, 0.6f),
-            restitution = 0.2f,
-            friction = 0.8f,
-            drag = 0.3f,
-            is_water = false,
-            water_density = 0f
-        },
-        new HeightColorStop {
-            name = "Grass",
-            height = 0.09f,
-            color = new Color(0.2f, 0.6f, 0.2f),
-            restitution = 0.4f,
-            friction = 0.6f,
-            drag = 0.1f,
-            is_water = false,
-            water_density = 0f
-        },
-        new HeightColorStop {
-            name = "Forest",
-            height = 0.14f,
-            color = new Color(0.1f, 0.4f, 0.1f),
-            restitution = 0.3f,
-            friction = 0.7f,
-            drag = 0.15f,
-            is_water = false,
-            water_density = 0f
-        },
-        new HeightColorStop {
-            name = "Rock",
-            height = 0.18f,
-            color = new Color(0.5f, 0.4f, 0.3f),
-            restitution = 0.8f,
-            friction = 0.4f,
-            drag = 0.0f,
-            is_water = false,
-            water_density = 0f
-        },
-        new HeightColorStop {
-            name = "Snow",
-            height = 0.23f,
-            color = new Color(1.0f, 1.0f, 1.0f),
-            restitution = 0.3f,
-            friction = 0.1f,
-            drag = 0.05f,
-            is_water = false,
-            water_density = 0f
-        }
-    };
-
-    [Header("WFC Prefabs")]
-    [SerializeField] GameObject[] tile_prefabs;
-    [SerializeField] public GameObject tile_base_prefab;
-    [SerializeField] public GameObject cell_base_prefab;
-    [SerializeField] GameObject pixel_prefab;
-
-    [Header("WFC Settings")]
-    [SerializeField] int pattern_size;
-    [SerializeField] int cell_grid_size;
-
-    // Terrain Painting
-    private Texture2D terrain_texture;
-    private int texture_width;
-    private int texture_height;
+    [Header("Cloud Appearance")]
+    [SerializeField] Color cloud_color_threshold = new Color(0.8f, 0.8f, 0.8f);
+    [SerializeField, Range(0f, 1f)] float spawn_threshold = 0.5f;
 
     // Tile Variables
-    private Dictionary<Vector2Int, GameObject> active_tiles = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<int, Tile> hash_to_tile = new Dictionary<int, Tile>();
     private Dictionary<int, Tile> index_to_tile = new Dictionary<int, Tile>();
 
@@ -250,384 +137,66 @@ public class WaveFunctionCollapse : MonoBehaviour
     private Dictionary<Vector2Int, Cell> position_to_cell = new Dictionary<Vector2Int, Cell>();
     private Dictionary<int, Cell> index_to_cell = new Dictionary<int, Cell>();
 
-    private String[] wfc_files = {"3Bricks.png", "Cat.png", "Cats.png" , "Cave.png", "Chess.png", "Circle.png", "City.png",
-    "ColoredCity.png", "Disk.png", "Dungeon.png", "Fabric.png", "Flowers.png", "Forest.png", "Hogs.png"};
-    private int wfc_index = 0;
+    // Spawned clouds
+    private List<GameObject> spawned_clouds = new List<GameObject>();
+
     private int wfc_retry_count = 0;
+    private bool wfc_complete = false;
+
+    public event Action OnWFCComplete;
 
     void Start()
     {
-        if (target_terrain != null)
+        if (cloud_bitmap != null)
         {
-            InitializeTerrainTexture();
-            CalculateGridSizeFromTerrain();
-            DebugTerrainHeights();
-            PaintTerrainByHeight();
+            StartCloudWFC();
+        }
+        else
+        {
+            Debug.LogWarning("WaveFunctionCollapse: No cloud bitmap assigned!");
         }
     }
 
-    void Update()
+    public void StartCloudWFC()
     {
-        if (Input.GetKeyDown(KeyCode.R))
-        {
-            RefreshTerrainColors();
-        }
+        ClearClouds();
+        ClearWFCData();
+        wfc_complete = false;
+
+        LoadWFCConditions(pattern_size, cloud_bitmap);
+        StepWFC();
     }
 
-    private void InitializeTerrainTexture()
+    public void StartCloudWFC(Texture2D bitmap)
     {
-        TerrainData terrain_data = target_terrain.terrainData;
-
-        texture_width = Mathf.RoundToInt(terrain_data.size.x * cells_per_terrain_unit);
-        texture_height = Mathf.RoundToInt(terrain_data.size.z * cells_per_terrain_unit);
-
-        terrain_texture = new Texture2D(texture_width, texture_height, TextureFormat.RGBA32, false);
-        terrain_texture.filterMode = FilterMode.Point;
-        terrain_texture.wrapMode = TextureWrapMode.Clamp;
-
-        Color[] pixels = new Color[texture_width * texture_height];
-        Color default_color = new Color(1f, 0.191f, 0.191f, 1.000f);
-
-        for (int i = 0; i < pixels.Length; i++)
-        {
-            pixels[i] = default_color;
-        }
-        terrain_texture.SetPixels(pixels);
-        terrain_texture.Apply();
-
-        ApplyTextureToTerrain();
+        cloud_bitmap = bitmap;
+        StartCloudWFC();
     }
 
-    private void ApplyTextureToTerrain()
+    private void ClearWFCData()
     {
-        TerrainData terrain_data = target_terrain.terrainData;
+        cells.Clear();
+        position_to_cell.Clear();
+        index_to_cell.Clear();
+        hash_to_tile.Clear();
+        index_to_tile.Clear();
+    }
 
-        TerrainLayer[] existing_layers = terrain_data.terrainLayers;
-        TerrainLayer wfc_layer = null;
-
-        wfc_layer = new TerrainLayer();
-        wfc_layer.name = "WFC_Layer";
-        wfc_layer.tileSize = new Vector2(terrain_data.size.x, terrain_data.size.z);
-        wfc_layer.tileOffset = Vector2.zero;
-
-        TerrainLayer[] new_layers = new TerrainLayer[existing_layers.Length + 1];
-        existing_layers.CopyTo(new_layers, 0);
-        new_layers[existing_layers.Length] = wfc_layer;
-        terrain_data.terrainLayers = new_layers;
-
-        wfc_layer.diffuseTexture = terrain_texture;
-
-        int alphamap_res = terrain_data.alphamapResolution;
-        float[,,] alphamaps = new float[alphamap_res, alphamap_res, terrain_data.terrainLayers.Length];
-
-        int wfc_layer_index = System.Array.IndexOf(terrain_data.terrainLayers, wfc_layer);
-
-        for (int y = 0; y < alphamap_res; y++)
+    public void ClearClouds()
+    {
+        foreach (GameObject cloud in spawned_clouds)
         {
-            for (int x = 0; x < alphamap_res; x++)
+            if (cloud != null)
             {
-                alphamaps[y, x, wfc_layer_index] = 1f;
+                Destroy(cloud);
             }
         }
-
-        terrain_data.SetAlphamaps(0, 0, alphamaps);
+        spawned_clouds.Clear();
     }
 
-    private void CalculateGridSizeFromTerrain()
+    private void LoadWFCConditions(int p_size, Texture2D bitmap)
     {
-        if (target_terrain == null) return;
-
-        TerrainData terrain_data = target_terrain.terrainData;
-
-        cell_grid_size = Mathf.Max(texture_width, texture_height);
-
-        UnityEngine.Debug.Log($"Terrain size: {terrain_data.size.x}x{terrain_data.size.z}, Grid size: {cell_grid_size}x{cell_grid_size}");
-    }
-
-    public void DebugTerrainHeights()
-    {
-        if (target_terrain == null) return;
-
-        float min_height = 1f;
-        float max_height = 0f;
-
-        for (int y = 0; y < texture_height; y++)
-        {
-            for (int x = 0; x < texture_width; x++)
-            {
-                float height = GetTerrainHeightAtCell(x, y);
-                if (height < min_height) min_height = height;
-                if (height > max_height) max_height = height;
-            }
-        }
-
-        UnityEngine.Debug.Log($"Terrain height range: {min_height} to {max_height}");
-    }
-
-    public float GetTerrainHeightAtCell(int cell_x, int cell_y)
-    {
-        if (target_terrain == null) return 0f;
-
-        TerrainData terrain_data = target_terrain.terrainData;
-
-        float norm_x = (float)cell_x / texture_width;
-        float norm_y = (float)cell_y / texture_height;
-
-        float height = terrain_data.GetInterpolatedHeight(norm_x, norm_y) / terrain_data.size.y;
-
-        return height;
-    }
-
-    public float GetTerrainHeightAtPosition(Vector3 world_position)
-    {
-        if (target_terrain == null) return 0f;
-
-        TerrainData terrain_data = target_terrain.terrainData;
-        Vector3 terrain_position = target_terrain.transform.position;
-
-        float norm_x = (world_position.x - terrain_position.x) / terrain_data.size.x;
-        float norm_z = (world_position.z - terrain_position.z) / terrain_data.size.z;
-
-        norm_x = Mathf.Clamp01(norm_x);
-        norm_z = Mathf.Clamp01(norm_z);
-
-        float height = terrain_data.GetInterpolatedHeight(norm_x, norm_z) / terrain_data.size.y;
-
-        return height;
-    }
-
-    public float GetAverageTerrainHeightAtCell(int cell_x, int cell_y, int samples_per_axis = 3)
-    {
-        if (target_terrain == null) return 0f;
-
-        TerrainData terrain_data = target_terrain.terrainData;
-
-        float cell_width = 1f / texture_width;
-        float cell_height = 1f / texture_height;
-
-        float start_x = (float)cell_x / texture_width;
-        float start_y = (float)cell_y / texture_height;
-
-        float total_height = 0f;
-        int sample_count = 0;
-
-        for (int sx = 0; sx < samples_per_axis; sx++)
-        {
-            for (int sy = 0; sy < samples_per_axis; sy++)
-            {
-                float sample_x = start_x + (cell_width * sx / (samples_per_axis - 1));
-                float sample_y = start_y + (cell_height * sy / (samples_per_axis - 1));
-
-                sample_x = Mathf.Clamp01(sample_x);
-                sample_y = Mathf.Clamp01(sample_y);
-
-                total_height += terrain_data.GetInterpolatedHeight(sample_x, sample_y);
-                sample_count++;
-            }
-        }
-
-        return (total_height / sample_count) / terrain_data.size.y;
-    }
-
-    public Color GetColorForHeight(float normalized_height)
-    {
-        if (height_colors == null || height_colors.Count == 0)
-        {
-            return Color.magenta;
-        }
-
-        if (height_colors.Count == 1)
-        {
-            return height_colors[0].color;
-        }
-
-        for (int i = 0; i < height_colors.Count - 1; i++)
-        {
-            HeightColorStop current = height_colors[i];
-            HeightColorStop next = height_colors[i + 1];
-
-            if (normalized_height >= current.height && normalized_height <= next.height)
-            {
-                float range = next.height - current.height;
-                float t = (normalized_height - current.height) / range;
-
-                return Color.Lerp(current.color, next.color, t);
-            }
-        }
-
-        if (normalized_height < height_colors[0].height)
-        {
-            return height_colors[0].color;
-        }
-
-        return height_colors[height_colors.Count - 1].color;
-    }
-
-    public HeightColorStop GetPropertiesForHeight(float normalized_height)
-    {
-        if (height_colors == null || height_colors.Count == 0)
-        {
-            return new HeightColorStop();
-        }
-
-        if (height_colors.Count == 1)
-        {
-            return height_colors[0];
-        }
-
-        for (int i = 0; i < height_colors.Count - 1; i++)
-        {
-            HeightColorStop current = height_colors[i];
-            HeightColorStop next = height_colors[i + 1];
-
-            if (normalized_height >= current.height && normalized_height < next.height)
-            {
-                return current;
-            }
-        }
-
-        if (normalized_height < height_colors[0].height)
-        {
-            return height_colors[0];
-        }
-
-        return height_colors[height_colors.Count - 1];
-    }
-
-    public HeightColorStop GetTerrainPropertiesAtPosition(Vector3 world_position)
-    {
-        float height = GetTerrainHeightAtPosition(world_position);
-        return GetPropertiesForHeight(height);
-    }
-
-    public void PaintTerrainByHeight()
-    {
-        if (terrain_texture == null || target_terrain == null) return;
-
-        Color[] pixels = new Color[texture_width * texture_height];
-
-        for (int y = 0; y < texture_height; y++)
-        {
-            for (int x = 0; x < texture_width; x++)
-            {
-                float height = GetTerrainHeightAtCell(x, y);
-                Color color = GetColorForHeight(height);
-                pixels[y * texture_width + x] = color;
-            }
-        }
-
-        terrain_texture.SetPixels(pixels);
-        terrain_texture.Apply();
-
-        UnityEngine.Debug.Log("Painted terrain by height");
-    }
-
-    public void RefreshTerrainColors()
-    {
-        if (target_terrain == null) return;
-
-        InitializeTerrainTexture();
-        PaintTerrainByHeight();
-    }
-
-    public void PaintTerrainAtCell(int cell_x, int cell_y, Color color)
-    {
-        if (terrain_texture == null) return;
-
-        int tex_x = Mathf.Clamp(cell_x, 0, texture_width - 1);
-        int tex_y = Mathf.Clamp(cell_y, 0, texture_height - 1);
-
-        terrain_texture.SetPixel(tex_x, tex_y, color);
-        terrain_texture.Apply();
-    }
-
-    public void PaintTerrainAtCellByHeight(int cell_x, int cell_y)
-    {
-        if (terrain_texture == null) return;
-
-        float height = GetTerrainHeightAtCell(cell_x, cell_y);
-        Color color = GetColorForHeight(height);
-        PaintTerrainAtCell(cell_x, cell_y, color);
-    }
-
-    public void PaintTerrainAtCells(List<Vector2Int> cell_positions, List<Color> colors)
-    {
-        if (terrain_texture == null || cell_positions.Count != colors.Count) return;
-
-        for (int i = 0; i < cell_positions.Count; i++)
-        {
-            int tex_x = Mathf.Clamp(cell_positions[i].x, 0, texture_width - 1);
-            int tex_y = Mathf.Clamp(cell_positions[i].y, 0, texture_height - 1);
-            terrain_texture.SetPixel(tex_x, tex_y, colors[i]);
-        }
-
-        terrain_texture.Apply();
-    }
-
-    public void SetTargetTerrain(Terrain terrain)
-    {
-        target_terrain = terrain;
-        InitializeTerrainTexture();
-        CalculateGridSizeFromTerrain();
-    }
-
-    private void SpawnTile(Vector2Int grid_pos)
-    {
-        int index = UnityEngine.Random.Range(0, tile_prefabs.Length);
-        GameObject tile_prefab = tile_prefabs[index];
-        Vector3 worldPos = new Vector3(grid_pos.x, 0, grid_pos.y);
-        GameObject tile = Instantiate(tile_prefab, worldPos, Quaternion.identity);
-        active_tiles.Add(grid_pos, tile);
-    }
-
-    public void UpdateWFC(Vector3 player_position)
-    {
-        Vector2Int playerGridPos = new Vector2Int(
-            Mathf.FloorToInt(player_position.x),
-            Mathf.FloorToInt(player_position.z)
-        );
-
-        HashSet<Vector2Int> tilesToKeep = new HashSet<Vector2Int>();
-
-        for (int x = -player_radius; x <= player_radius; x++)
-        {
-            for (int y = -player_radius; y <= player_radius; y++)
-            {
-                Vector2Int grid_pos = new Vector2Int(
-                    playerGridPos.x + x,
-                    playerGridPos.y + y
-                );
-
-                grid_pos -= grid_start;
-                tilesToKeep.Add(grid_pos);
-
-                if (!active_tiles.ContainsKey(grid_pos))
-                {
-                    SpawnTile(grid_pos);
-                }
-            }
-        }
-
-        List<Vector2Int> tilesToRemove = new List<Vector2Int>();
-
-        foreach (var pair in active_tiles)
-        {
-            if (!tilesToKeep.Contains(pair.Key))
-                tilesToRemove.Add(pair.Key);
-        }
-
-        foreach (var tile in tilesToRemove)
-        {
-            Destroy(active_tiles[tile]);
-            active_tiles.Remove(tile);
-        }
-    }
-
-    private void LoadWFCConditions(int p_size, string file_name)
-    {
-        UnityEngine.Debug.Log("Starting WFC Conditions");
-
-        Texture2D bitmap = LoadBitmap(file_name);
+        Debug.Log("Starting Cloud WFC Conditions");
 
         int next_tile_index = 0;
 
@@ -659,9 +228,6 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         int cell_index = 0;
 
-        int grid_width = texture_width > 0 ? texture_width : cell_grid_size;
-        int grid_height = texture_height > 0 ? texture_height : cell_grid_size;
-
         for (int x = 0; x < grid_width; x++)
         {
             for (int y = 0; y < grid_height; y++)
@@ -677,13 +243,10 @@ public class WaveFunctionCollapse : MonoBehaviour
             }
         }
 
+        // Collapse a random starting cell
         int random_cell_index = UnityEngine.Random.Range(0, cells.Count);
         int tile_index = UnityEngine.Random.Range(0, next_tile_index);
-        int center_index = (pattern_size * pattern_size) / 2;
 
-        Color tile_center_color = index_to_tile[tile_index].tile_pixels[center_index];
-
-        cells[random_cell_index].UpdateCell(tile_center_color);
         cells[random_cell_index].collapsed = true;
         cells[random_cell_index].collapsed_tile = index_to_tile[tile_index];
         ReduceEntropy(cells[random_cell_index]);
@@ -718,18 +281,18 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         if (cell_index == -1)
         {
-            UnityEngine.Debug.Log("No valid cell left to collapse.");
             if (collapse_count >= cells.Count)
             {
                 wfc_retry_count = 0;
-                StartNextWFC();
+                OnWFCFinished();
             }
             else
             {
                 if (wfc_retry_count >= 3)
                 {
                     wfc_retry_count = 0;
-                    StartNextWFC();
+                    Debug.LogWarning("WaveFunctionCollapse: Max retries reached, spawning with partial solution");
+                    OnWFCFinished();
                 }
                 else
                 {
@@ -744,17 +307,13 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         if (selected_cell.collapse_options.Count == 0)
         {
-            UnityEngine.Debug.LogError("Contradiction: Cell has no valid options!");
+            Debug.LogError("Contradiction: Cell has no valid options!");
             return;
         }
 
         int selected_option_index = UnityEngine.Random.Range(0, selected_cell.collapse_options.Count);
         Tile tile_to_collapse_cell_to = selected_cell.collapse_options[selected_option_index];
         selected_cell.collapsed_tile = tile_to_collapse_cell_to;
-
-        int center_index = (pattern_size * pattern_size) / 2;
-        Color tile_center_color = selected_cell.collapsed_tile.tile_pixels[center_index];
-        selected_cell.UpdateCell(tile_center_color);
 
         selected_cell.collapse_options.Clear();
         selected_cell.collapsed = true;
@@ -764,17 +323,57 @@ public class WaveFunctionCollapse : MonoBehaviour
         Invoke(nameof(StepWFC), 0.0001f);
     }
 
+    private void OnWFCFinished()
+    {
+        wfc_complete = true;
+        Debug.Log("WaveFunctionCollapse: Collapse complete, spawning clouds...");
+        SpawnCloudsFromResult();
+        OnWFCComplete?.Invoke();
+    }
+
+    private void SpawnCloudsFromResult()
+    {
+        int center_index = (pattern_size * pattern_size) / 2;
+
+        foreach (Cell cell in cells)
+        {
+            if (!cell.collapsed || cell.collapsed_tile == null) continue;
+
+            Color center_color = cell.collapsed_tile.tile_pixels[center_index];
+
+            Vector3 spawn_pos = spawn_origin + new Vector3(
+                cell.x * cloud_spacing,
+                cloud_height,
+                cell.y * cloud_spacing
+            );
+
+            GameObject cloud = Instantiate(cloud_prefab, spawn_pos, Quaternion.identity, transform);
+
+            // Set cloud color based on bitmap
+            CloudTile cloud_tile = cloud.GetComponent<CloudTile>();
+            if (cloud_tile != null)
+            {
+                cloud_tile.SetCloudColor(center_color);
+                cloud_tile.SetGridPosition(cell.x, cell.y);
+            }
+
+            spawned_clouds.Add(cloud);
+        }
+
+        Debug.Log($"WaveFunctionCollapse: Spawned {spawned_clouds.Count} clouds");
+    }
+
     private void ReduceEntropy(Cell start_cell)
     {
-        Queue<Cell> cells_to_proccess = new Queue<Cell>();
+        Queue<Cell> cells_to_process = new Queue<Cell>();
         HashSet<int> cells_in_queue = new HashSet<int>();
 
-        cells_to_proccess.Enqueue(start_cell);
+        cells_to_process.Enqueue(start_cell);
         cells_in_queue.Add(start_cell.cell_index);
 
-        while (cells_to_proccess.Count > 0)
+        while (cells_to_process.Count > 0)
         {
-            Cell current = cells_to_proccess.Dequeue();
+            Cell current = cells_to_process.Dequeue();
             cells_in_queue.Remove(current.cell_index);
 
             foreach (DIRECTIONS direction in Enum.GetValues(typeof(DIRECTIONS)))
@@ -828,7 +427,7 @@ public class WaveFunctionCollapse : MonoBehaviour
                 {
                     if (!cells_in_queue.Contains(neighbor.cell_index))
                     {
-                        cells_to_proccess.Enqueue(neighbor);
+                        cells_to_process.Enqueue(neighbor);
                         cells_in_queue.Add(neighbor.cell_index);
                     }
                 }
@@ -919,61 +518,11 @@ public class WaveFunctionCollapse : MonoBehaviour
 
         int random_cell_index = UnityEngine.Random.Range(0, cells.Count);
         int tile_index = UnityEngine.Random.Range(0, index_to_tile.Count);
-        int center_index = (pattern_size * pattern_size) / 2;
 
-        Color tile_center_color = index_to_tile[tile_index].tile_pixels[center_index];
-
-        cells[random_cell_index].UpdateCell(tile_center_color);
         cells[random_cell_index].collapsed = true;
         cells[random_cell_index].collapsed_tile = index_to_tile[tile_index];
         ReduceEntropy(cells[random_cell_index]);
         StepWFC();
-    }
-
-    private void StartNextWFC()
-    {
-        CancelInvoke(nameof(StepWFC));
-
-        cells.Clear();
-        position_to_cell.Clear();
-        index_to_cell.Clear();
-
-        active_tiles.Clear();
-        hash_to_tile.Clear();
-        index_to_tile.Clear();
-
-        wfc_index++;
-        if (wfc_index >= wfc_files.Length)
-        {
-            UnityEngine.Debug.Log("Finished all WFC files!");
-            return;
-        }
-
-        LoadWFCConditions(pattern_size, wfc_files[wfc_index]);
-    }
-
-    private List<int> CompareTiles(Tile tile_a, Tile tile_b)
-    {
-        List<int> similarities = new List<int>();
-        for (int i = 0; i < tile_a.tile_pixels.Length; i++)
-        {
-            if (tile_a.tile_pixels[i] == tile_b.tile_pixels[i])
-            {
-                similarities.Add(i);
-            }
-        }
-        return similarities;
-    }
-
-    private Texture2D LoadBitmap(string file_name)
-    {
-        string path = "Assets/WFC_Bitmaps/" + file_name;
-        byte[] bitmap_data = File.ReadAllBytes(path);
-
-        Texture2D texture = new Texture2D(2, 2);
-        texture.LoadImage(bitmap_data);
-
-        return texture;
     }
 
     private Color[] PullPattern(Texture2D texture, int pattern_size, Vector2Int corner)
@@ -1018,63 +567,7 @@ public class WaveFunctionCollapse : MonoBehaviour
         }
     }
 
-    private void DisplayPatterns(int bitmap_depth, int pattern_size)
-    {
-        int x = 0;
-        int z = 0;
-
-        Vector3 tile_center = new Vector3();
-        tile_center.x = x;
-        tile_center.z = z;
-
-        float pixel_size = 0.33f;
-        float pattern_depth = pixel_size * pattern_size;
-
-        foreach (KeyValuePair<int, Tile> pair in hash_to_tile)
-        {
-            Tile tile = pair.Value;
-            int tile_x = 0;
-            int tile_z = 0;
-
-            GameObject tile_base = Instantiate(tile_base_prefab);
-            tile_base.transform.position = tile_center;
-
-            for (int i = 0; i < tile.tile_pixels.Length; i++)
-            {
-                GameObject pixel = Instantiate(pixel_prefab);
-                Vector3 pixel_spawn = new Vector3();
-
-                float spawn_x = (tile_center.x - pattern_depth / 2 + pixel_size / 2) + (pixel_size * tile_x);
-                float spawn_z = (tile_center.z - pattern_depth / 2 + pixel_size / 2) + (pixel_size * tile_z);
-
-                pixel_spawn.x = spawn_x;
-                pixel_spawn.y = 0.05f;
-                pixel_spawn.z = spawn_z;
-
-                pixel.transform.position = pixel_spawn;
-
-                Renderer p_render = pixel.GetComponent<Renderer>();
-                p_render.material.color = tile.tile_pixels[i];
-
-                tile_x++;
-
-                if (tile_x == pattern_size)
-                {
-                    tile_x = 0;
-                    tile_z++;
-                }
-            }
-            if (x > bitmap_depth)
-            {
-                x = 0;
-                z++;
-            }
-
-            x++;
-
-            tile_center.x = x * (pattern_depth * 1.1f);
-            tile_center.y = 0;
-            tile_center.z = z * (pattern_depth * 1.1f);
-        }
-    }
+    // Public accessors
+    public bool IsComplete => wfc_complete;
+    public List<GameObject> GetSpawnedClouds() => spawned_clouds;
 }
