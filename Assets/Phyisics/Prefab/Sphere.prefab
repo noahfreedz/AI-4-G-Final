@@ -172,7 +172,7 @@ MonoBehaviour:
   enableSphereCollision: 1
   restitution: 0.5
   enableDestructionTimer: 1
-  destructionDelay: 5
+  destructionDelay: 3
   fadeOut: 1
   fadeStartTime: 1
   gravity: -18.75

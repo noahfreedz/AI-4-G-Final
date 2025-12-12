@@ -425,7 +425,7 @@ public class ParticleUpdate : MonoBehaviour
             hasCollided = true;
             destructionTimerStarted = true;
             destructionTimer = 0f;
-            Debug.Log($"{gameObject.name}: Collision detected! Destruction in {destructionDelay} seconds.");
+            //Debug.Log($"{gameObject.name}: Collision detected! Destruction in {destructionDelay} seconds.");
         }
     }
 

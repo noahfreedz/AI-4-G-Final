@@ -589,8 +589,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   heightmapImporter: {fileID: 1462394439}
   terrainErosion: {fileID: 1462394441}
-  waterLevel: {fileID: 0}
   thm: {fileID: 0}
+  terrainToMesh: {fileID: 0}
   toggleKey: 9
   showGUI: 0
 --- !u!114 &1462394446
@@ -664,6 +664,8 @@ MonoBehaviour:
     drag: 0.05
     is_water: 0
     water_density: 0
+  texture_width: 0
+  texture_height: 0
 --- !u!114 &1462394447
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -678,11 +680,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   cloud_bitmap: {fileID: 2800000, guid: 83d385c2a2207204d825090e7d037934, type: 3}
   pattern_size: 2
-  grid_width: 50
-  grid_height: 50
+  grid_width: 25
+  grid_height: 25
   cloud_prefab: {fileID: 2920455445572702987, guid: 836bd53dac1a9734b8db60cc79137914, type: 3}
   cloud_height: 250
-  cloud_spacing: 50
-  spawn_origin: {x: 0, y: 0, z: 0}
+  cloud_spacing: 100
+  spawn_origin: {x: -100, y: 0, z: -30}
   cloud_color_threshold: {r: 0.87058824, g: 0.8784314, b: 0.8862745, a: 1}
   spawn_threshold: 0.5
